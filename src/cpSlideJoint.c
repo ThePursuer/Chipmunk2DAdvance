@@ -32,7 +32,7 @@ preStep(cpSlideJoint *joint, cpFloat dt)
 	
 	cpVect delta = cpvsub(cpvadd(b->p, joint->r2), cpvadd(a->p, joint->r1));
 	cpFloat dist = cpvlength(delta);
-	cpFloat pdist = 0.0f;
+	cpFloat pdist = 0;
 	if(dist > joint->max) {
 		pdist = dist - joint->max;
 		joint->n = cpvnormalize(delta);
@@ -41,15 +41,15 @@ preStep(cpSlideJoint *joint, cpFloat dt)
 		joint->n = cpvneg(cpvnormalize(delta));
 	} else {
 		joint->n = cpvzero;
-		joint->jnAcc = 0.0f;
+		joint->jnAcc = 0;
 	}
 	
 	// calculate mass normal
-	joint->nMass = 1.0f/k_scalar(a, b, joint->r1, joint->r2, joint->n);
+	joint->nMass = fix14_inverse(k_scalar(a, b, joint->r1, joint->r2, joint->n));
 	
 	// calculate bias velocity
 	cpFloat maxBias = joint->constraint.maxBias;
-	joint->bias = cpfclamp(-bias_coef(joint->constraint.errorBias, dt)*pdist/dt, -maxBias, maxBias);
+	joint->bias = cpfclamp(fix14_div(fix14_mul(-bias_coef(joint->constraint.errorBias, dt), pdist), dt), -maxBias, maxBias);
 }
 
 static void
@@ -58,7 +58,7 @@ applyCachedImpulse(cpSlideJoint *joint, cpFloat dt_coef)
 	cpBody *a = joint->constraint.a;
 	cpBody *b = joint->constraint.b;
 	
-	cpVect j = cpvmult(joint->n, joint->jnAcc*dt_coef);
+	cpVect j = cpvmult(joint->n, fix14_mul(joint->jnAcc, dt_coef));
 	apply_impulses(a, b, joint->r1, joint->r2, j);
 }
 
@@ -79,9 +79,9 @@ applyImpulse(cpSlideJoint *joint, cpFloat dt)
 	cpFloat vrn = cpvdot(vr, n);
 	
 	// compute normal impulse
-	cpFloat jn = (joint->bias - vrn)*joint->nMass;
+	cpFloat jn = fix14_mul((joint->bias - vrn), joint->nMass);
 	cpFloat jnOld = joint->jnAcc;
-	joint->jnAcc = cpfclamp(jnOld + jn, -joint->constraint.maxForce*dt, 0.0f);
+	joint->jnAcc = cpfclamp(jnOld + jn, fix14_mul(-joint->constraint.maxForce, dt), 0);
 	jn = joint->jnAcc - jnOld;
 	
 	// apply impulse
@@ -117,7 +117,7 @@ cpSlideJointInit(cpSlideJoint *joint, cpBody *a, cpBody *b, cpVect anchorA, cpVe
 	joint->min = min;
 	joint->max = max;
 	
-	joint->jnAcc = 0.0f;
+	joint->jnAcc = 0;
 	
 	return joint;
 }

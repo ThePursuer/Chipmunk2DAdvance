@@ -4,7 +4,7 @@
 cpBool
 cpCheckPointGreater(const cpVect a, const cpVect b, const cpVect c)
 {
-	return (b.y - a.y)*(a.x + b.x - 2*c.x) > (b.x - a.x)*(a.y + b.y - 2*c.y);
+	return fix14_mul((b.y - a.y), (a.x + b.x - (c.x << 1))) > fix14_mul((b.x - a.x), (a.y + b.y - (c.y << 1)));
 }
 
 cpBool

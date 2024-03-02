@@ -70,7 +70,7 @@ int cpArbiterGetCount(const cpArbiter *arb)
 cpVect
 cpArbiterGetNormal(const cpArbiter *arb)
 {
-	return cpvmult(arb->n, arb->swapped ? -1.0f : 1.0);
+	return cpvmult(arb->n, arb->swapped ? -int_to_fix14(1) : int_to_fix14(1));
 }
 
 cpVect
@@ -206,13 +206,13 @@ cpArbiterSetFriction(cpArbiter *arb, cpFloat friction)
 cpVect
 cpArbiterGetSurfaceVelocity(cpArbiter *arb)
 {
-	return cpvmult(arb->surface_vr, arb->swapped ? -1.0f : 1.0);
+	return cpvmult(arb->surface_vr, arb->swapped ? -int_to_fix14(1) : int_to_fix14(1));
 }
 
 void
 cpArbiterSetSurfaceVelocity(cpArbiter *arb, cpVect vr)
 {
-	arb->surface_vr = cpvmult(vr, arb->swapped ? -1.0f : 1.0);
+	arb->surface_vr = cpvmult(vr, arb->swapped ? -int_to_fix14(1) : int_to_fix14(1));
 }
 
 cpDataPointer
@@ -322,8 +322,8 @@ cpArbiterInit(cpArbiter *arb, cpShape *a, cpShape *b)
 	arb->handlerA = NULL;
 	arb->handlerB = NULL;
 	
-	arb->e = 0.0f;
-	arb->u = 0.0f;
+	arb->e = 0;
+	arb->u = 0;
 	arb->surface_vr = cpvzero;
 	
 	arb->count = 0;
@@ -372,7 +372,7 @@ cpArbiterUpdate(cpArbiter *arb, struct cpCollisionInfo *info, cpSpace *space)
 		con->r2 = cpvsub(con->r2, b->body->p);
 		
 		// Cached impulses are not zeroed at init time.
-		con->jnAcc = con->jtAcc = 0.0f;
+		con->jnAcc = con->jtAcc = 0;
 		
 		for(int j=0; j<arb->count; j++){
 			struct cpContact *old = &arb->contacts[j];
@@ -390,8 +390,8 @@ cpArbiterUpdate(cpArbiter *arb, struct cpCollisionInfo *info, cpSpace *space)
 	arb->count = info->count;
 	arb->n = info->n;
 	
-	arb->e = a->e * b->e;
-	arb->u = a->u * b->u;
+	arb->e = fix14_mul(a->e, b->e);
+	arb->u = fix14_mul(a->u, b->u);
 	
 	cpVect surface_vr = cpvsub(b->surfaceV, a->surfaceV);
 	arb->surface_vr = cpvsub(surface_vr, cpvmult(info->n, cpvdot(surface_vr, info->n)));
@@ -425,16 +425,16 @@ cpArbiterPreStep(cpArbiter *arb, cpFloat dt, cpFloat slop, cpFloat bias)
 		struct cpContact *con = &arb->contacts[i];
 		
 		// Calculate the mass normal and mass tangent.
-		con->nMass = 1.0f/k_scalar(a, b, con->r1, con->r2, n);
-		con->tMass = 1.0f/k_scalar(a, b, con->r1, con->r2, cpvperp(n));
+		con->nMass = fix14_inverse(k_scalar(a, b, con->r1, con->r2, n));
+		con->tMass = fix14_inverse(k_scalar(a, b, con->r1, con->r2, cpvperp(n)));
 				
 		// Calculate the target bias velocity.
 		cpFloat dist = cpvdot(cpvadd(cpvsub(con->r2, con->r1), body_delta), n);
-		con->bias = -bias*cpfmin(0.0f, dist + slop)/dt;
-		con->jBias = 0.0f;
+		con->bias = fix14_div(fix14_div(-bias, cpfmin(0, dist + slop)), dt);
+		con->jBias = 0;
 		
 		// Calculate the target bounce velocity.
-		con->bounce = normal_relative_velocity(a, b, con->r1, con->r2, n)*arb->e;
+		con->bounce = fix14_mul(normal_relative_velocity(a, b, con->r1, con->r2, n), arb->e);
 	}
 }
 
@@ -479,16 +479,16 @@ cpArbiterApplyImpulse(cpArbiter *arb)
 		cpFloat vrn = cpvdot(vr, n);
 		cpFloat vrt = cpvdot(vr, cpvperp(n));
 		
-		cpFloat jbn = (con->bias - vbn)*nMass;
+		cpFloat jbn = fix14_mul((con->bias - vbn), nMass);
 		cpFloat jbnOld = con->jBias;
-		con->jBias = cpfmax(jbnOld + jbn, 0.0f);
+		con->jBias = cpfmax(jbnOld + jbn, 0);
 		
-		cpFloat jn = -(con->bounce + vrn)*nMass;
+		cpFloat jn = fix14_mul(-(con->bounce + vrn), nMass);
 		cpFloat jnOld = con->jnAcc;
-		con->jnAcc = cpfmax(jnOld + jn, 0.0f);
+		con->jnAcc = cpfmax(jnOld + jn, 0);
 		
-		cpFloat jtMax = friction*con->jnAcc;
-		cpFloat jt = -vrt*con->tMass;
+		cpFloat jtMax = fix14_mul(friction, con->jnAcc);
+		cpFloat jt = fix14_mul(-vrt, con->tMass);
 		cpFloat jtOld = con->jtAcc;
 		con->jtAcc = cpfclamp(jtOld + jt, -jtMax, jtMax);
 		

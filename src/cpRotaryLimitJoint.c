@@ -28,7 +28,7 @@ preStep(cpRotaryLimitJoint *joint, cpFloat dt)
 	cpBody *b = joint->constraint.b;
 	
 	cpFloat dist = b->a - a->a;
-	cpFloat pdist = 0.0f;
+	cpFloat pdist = 0;
 	if(dist > joint->max) {
 		pdist = joint->max - dist;
 	} else if(dist < joint->min) {
@@ -36,14 +36,14 @@ preStep(cpRotaryLimitJoint *joint, cpFloat dt)
 	}
 	
 	// calculate moment of inertia coefficient.
-	joint->iSum = 1.0f/(a->i_inv + b->i_inv);
+	joint->iSum = fix14_inverse(a->i_inv + b->i_inv);
 	
 	// calculate bias velocity
 	cpFloat maxBias = joint->constraint.maxBias;
-	joint->bias = cpfclamp(-bias_coef(joint->constraint.errorBias, dt)*pdist/dt, -maxBias, maxBias);
+	joint->bias = cpfclamp(fix14_div(fix14_mul(-bias_coef(joint->constraint.errorBias, dt), pdist), dt), -maxBias, maxBias);
 
 	// If the bias is 0, the joint is not at a limit. Reset the impulse.
-	if(!joint->bias) joint->jAcc = 0.0f;
+	if(!joint->bias) joint->jAcc = 0;
 }
 
 static void
@@ -52,9 +52,9 @@ applyCachedImpulse(cpRotaryLimitJoint *joint, cpFloat dt_coef)
 	cpBody *a = joint->constraint.a;
 	cpBody *b = joint->constraint.b;
 	
-	cpFloat j = joint->jAcc*dt_coef;
-	a->w -= j*a->i_inv;
-	b->w += j*b->i_inv;
+	cpFloat j = fix14_mul(joint->jAcc, dt_coef);
+	a->w -= fix14_mul(j, a->i_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static void
@@ -68,21 +68,21 @@ applyImpulse(cpRotaryLimitJoint *joint, cpFloat dt)
 	// compute relative rotational velocity
 	cpFloat wr = b->w - a->w;
 	
-	cpFloat jMax = joint->constraint.maxForce*dt;
+	cpFloat jMax = fix14_mul(joint->constraint.maxForce, dt);
 	
 	// compute normal impulse	
-	cpFloat j = -(joint->bias + wr)*joint->iSum;
+	cpFloat j = fix14_mul(-(joint->bias + wr), joint->iSum);
 	cpFloat jOld = joint->jAcc;
-	if(joint->bias < 0.0f){
-		joint->jAcc = cpfclamp(jOld + j, 0.0f, jMax);
+	if(joint->bias < 0){
+		joint->jAcc = cpfclamp(jOld + j, 0, jMax);
 	} else {
-		joint->jAcc = cpfclamp(jOld + j, -jMax, 0.0f);
+		joint->jAcc = cpfclamp(jOld + j, -jMax, 0);
 	}
 	j = joint->jAcc - jOld;
 	
 	// apply impulse
-	a->w -= j*a->i_inv;
-	b->w += j*b->i_inv;
+	a->w -= fix14_mul(j, a->i_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static cpFloat
@@ -112,7 +112,7 @@ cpRotaryLimitJointInit(cpRotaryLimitJoint *joint, cpBody *a, cpBody *b, cpFloat 
 	joint->min = min;
 	joint->max  = max;
 	
-	joint->jAcc = 0.0f;
+	joint->jAcc = 0;
 	
 	return joint;
 }

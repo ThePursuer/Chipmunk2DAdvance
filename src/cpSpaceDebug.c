@@ -58,22 +58,22 @@ cpSpaceDebugDrawShape(cpShape *shape, cpSpaceDebugDrawOptions *options)
 	}
 }
 
-static const cpVect spring_verts[] = {
-	{0.00f, 0.0f},
-	{0.20f, 0.0f},
-	{0.25f, 3.0f},
-	{0.30f,-6.0f},
-	{0.35f, 6.0f},
-	{0.40f,-6.0f},
-	{0.45f, 6.0f},
-	{0.50f,-6.0f},
-	{0.55f, 6.0f},
-	{0.60f,-6.0f},
-	{0.65f, 6.0f},
-	{0.70f,-3.0f},
-	{0.75f, 6.0f},
-	{0.80f, 0.0f},
-	{1.00f, 0.0f},
+static cpVect spring_verts[] = {
+	{0, 0},
+	{3276, 0},
+	{4096, 49152},
+	{4914,-98304},
+	{5733, 98304},
+	{6552,-98304},
+	{7371, 98304},
+	{8190,-98304},
+	{9009, 98304},
+	{9828,-98304},
+	{10647, 98304},
+	{11466,-49152},
+	{12285, 98304},
+	{13104, 0},
+	{(1 << 14), 0},
 };
 static const int spring_count = sizeof(spring_verts)/sizeof(cpVect);
 
@@ -133,7 +133,7 @@ cpSpaceDebugDrawConstraint(cpConstraint *constraint, cpSpaceDebugDrawOptions *op
 		cpVect delta = cpvsub(b, a);
 		cpFloat cos = delta.x;
 		cpFloat sin = delta.y;
-		cpFloat s = 1.0f/cpvlength(delta);
+		cpFloat s = fix14_inverse(cpvlength(delta));
 		
 		cpVect r1 = cpv(cos, -sin*s);
 		cpVect r2 = cpv(sin,  cos*s);

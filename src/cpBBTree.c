@@ -86,11 +86,10 @@ GetBB(cpBBTree *tree, void *obj)
 	
 	cpBBTreeVelocityFunc velocityFunc = tree->velocityFunc;
 	if(velocityFunc){
-		cpFloat coef = 0.1f;
-		cpFloat x = (bb.r - bb.l)*coef;
-		cpFloat y = (bb.t - bb.b)*coef;
+		cpFloat x = fix14_div((bb.r - bb.l), int_to_fix14(10));
+		cpFloat y = fix14_div((bb.t - bb.b), int_to_fix14(10));
 		
-		cpVect v = cpvmult(velocityFunc(obj), 0.1f);
+		cpVect v = cpvmult(velocityFunc(obj), fix14_inverse(int_to_fix14(10)));
 		return cpBBNew(bb.l + cpfmin(-x, v.x), bb.b + cpfmin(-y, v.y), bb.r + cpfmax(x, v.x), bb.t + cpfmax(y, v.y));
 	} else {
 		return bb;
@@ -771,7 +770,7 @@ partitionNodes(cpBBTree *tree, Node **nodes, int count)
 	}
 	
 	qsort(bounds, count*2, sizeof(cpFloat), (int (*)(const void *, const void *))cpfcompare);
-	cpFloat split = (bounds[count - 1] + bounds[count])*0.5f; // use the medain as the split
+	cpFloat split = fix14_mul((bounds[count - 1] + bounds[count]), 8192); // use the medain as the split
 	cpfree(bounds);
 
 	// Generate the child BBs

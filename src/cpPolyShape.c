@@ -77,7 +77,7 @@ cpPolyShapePointQuery(cpPolyShape *poly, cpVect p, cpPointQueryInfo *info){
 	
 	for(int i=0; i<count; i++){
 		cpVect v1 = planes[i].v0;
-		outside = outside || (cpvdot(planes[i].n, cpvsub(p,v1)) > 0.0f);
+		outside = outside || (cpvdot(planes[i].n, cpvsub(p,v1)) > 0);
 		
 		cpVect closest = cpClosetPointOnSegment(p, v0, v1);
 		
@@ -92,7 +92,7 @@ cpPolyShapePointQuery(cpPolyShape *poly, cpVect p, cpPointQueryInfo *info){
 	}
 	
 	cpFloat dist = (outside ? minDist : -minDist);
-	cpVect g = cpvmult(cpvsub(p, closestPoint), 1.0f/dist);
+	cpVect g = cpvmult(cpvsub(p, closestPoint), fix14_inverse(dist));
 	
 	info->shape = (cpShape *)poly;
 	info->point = cpvadd(closestPoint, cpvmult(g, r));
@@ -114,12 +114,12 @@ cpPolyShapeSegmentQuery(cpPolyShape *poly, cpVect a, cpVect b, cpFloat r2, cpSeg
 		cpVect n = planes[i].n;
 		cpFloat an = cpvdot(a, n);
 		cpFloat d =  an - cpvdot(planes[i].v0, n) - rsum;
-		if(d < 0.0f) continue;
+		if(d < 0) continue;
 		
 		cpFloat bn = cpvdot(b, n);
 		// Avoid divide by zero. (d is always positive)
-		cpFloat t = d/cpfmax(an - bn, CPFLOAT_MIN);
-		if(t < 0.0f || 1.0f < t) continue;
+		cpFloat t = fix14_div(d, cpfmax(an - bn, INT32_MIN));
+		if(t < 0 || int_to_fix14(1) < t) continue;
 		
 		cpVect point = cpvlerp(a, b, t);
 		cpFloat dt = cpvcross(n, point);
@@ -135,9 +135,9 @@ cpPolyShapeSegmentQuery(cpPolyShape *poly, cpVect a, cpVect b, cpFloat r2, cpSeg
 	}
 	
 	// Also check against the beveled vertexes.
-	if(rsum > 0.0f){
+	if(rsum > 0){
 		for(int i=0; i<count; i++){
-			cpSegmentQueryInfo circle_info = {NULL, b, cpvzero, 1.0f};
+			cpSegmentQueryInfo circle_info = {NULL, b, cpvzero, int_to_fix14(1)};
 			CircleSegmentQuery(&poly->shape, planes[i].v0, r, a, b, r2, &circle_info);
 			if(circle_info.alpha < info->alpha) (*info) = circle_info;
 		}
@@ -171,7 +171,7 @@ cpPolyShapeMassInfo(cpFloat mass, int count, const cpVect *verts, cpFloat radius
 	
 	cpVect centroid = cpCentroidForPoly(count, verts);
 	struct cpShapeMassInfo info = {
-		mass, cpMomentForPoly(1.0f, count, verts, cpvneg(centroid), radius),
+		mass, cpMomentForPoly(int_to_fix14(1), count, verts, cpvneg(centroid), radius),
 		centroid,
 		cpAreaForPoly(count, verts, radius),
 	};
@@ -195,14 +195,14 @@ cpPolyShapeInit(cpPolyShape *poly, cpBody *body, int count, const cpVect *verts,
 	// Transform the verts before building the hull in case of a negative scale.
 	for(int i=0; i<count; i++) hullVerts[i] = cpTransformPoint(transform, verts[i]);
 	
-	unsigned int hullCount = cpConvexHull(count, hullVerts, hullVerts, NULL, 0.0);
+	unsigned int hullCount = cpConvexHull(count, hullVerts, hullVerts, NULL, 0);
 	return cpPolyShapeInitRaw(poly, body, hullCount, hullVerts, radius);
 }
 
 cpPolyShape *
 cpPolyShapeInitRaw(cpPolyShape *poly, cpBody *body, int count, const cpVect *verts, cpFloat radius)
 {
-	cpShapeInit((cpShape *)poly, &polyClass, body, cpPolyShapeMassInfo(0.0f, count, verts, radius));
+	cpShapeInit((cpShape *)poly, &polyClass, body, cpPolyShapeMassInfo(0, count, verts, radius));
 	
 	SetVerts(poly, count, verts);
 	poly->r = radius;
@@ -225,8 +225,8 @@ cpPolyShapeNewRaw(cpBody *body, int count, const cpVect *verts, cpFloat radius)
 cpPolyShape *
 cpBoxShapeInit(cpPolyShape *poly, cpBody *body, cpFloat width, cpFloat height, cpFloat radius)
 {
-	cpFloat hw = width/2.0f;
-	cpFloat hh = height/2.0f;
+	cpFloat hw = (width >> 1);
+	cpFloat hh = (height >> 1);
 	
 	return cpBoxShapeInit2(poly, body, cpBBNew(-hw, -hh, hw, hh), radius);
 }
@@ -291,7 +291,7 @@ cpPolyShapeSetVerts(cpShape *shape, int count, cpVect *verts, cpTransform transf
 	// Transform the verts before building the hull in case of a negative scale.
 	for(int i=0; i<count; i++) hullVerts[i] = cpTransformPoint(transform, verts[i]);
 	
-	unsigned int hullCount = cpConvexHull(count, hullVerts, hullVerts, NULL, 0.0);
+	unsigned int hullCount = cpConvexHull(count, hullVerts, hullVerts, NULL, 0);
 	cpPolyShapeSetVertsRaw(shape, hullCount, hullVerts);
 }
 
@@ -306,7 +306,7 @@ cpPolyShapeSetVertsRaw(cpShape *shape, int count, cpVect *verts)
 	
 	cpFloat mass = shape->massInfo.m;
 	shape->massInfo = cpPolyShapeMassInfo(shape->massInfo.m, count, verts, poly->r);
-	if(mass > 0.0f) cpBodyAccumulateMassFromShapes(shape->body);
+	if(mass > 0) cpBodyAccumulateMassFromShapes(shape->body);
 }
 
 void
@@ -320,5 +320,5 @@ cpPolyShapeSetRadius(cpShape *shape, cpFloat radius)
 	// TODO radius is not handled by moment/area
 //	cpFloat mass = shape->massInfo.m;
 //	shape->massInfo = cpPolyShapeMassInfo(shape->massInfo.m, poly->count, poly->verts, poly->r);
-//	if(mass > 0.0f) cpBodyAccumulateMassFromShapes(shape->body);
+//	if(mass > 0) cpBodyAccumulateMassFromShapes(shape->body);
 }

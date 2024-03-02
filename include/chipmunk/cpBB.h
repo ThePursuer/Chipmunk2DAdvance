@@ -102,13 +102,13 @@ cpBBCenter(cpBB bb)
 /// Returns the area of the bounding box.
 static inline cpFloat cpBBArea(cpBB bb)
 {
-	return (bb.r - bb.l)*(bb.t - bb.b);
+	return fix14_mul((bb.r - bb.l), (bb.t - bb.b));
 }
 
 /// Merges @c a and @c b and returns the area of the merged bounding box.
 static inline cpFloat cpBBMergedArea(cpBB a, cpBB b)
 {
-	return (cpfmax(a.r, b.r) - cpfmin(a.l, b.l))*(cpfmax(a.t, b.t) - cpfmin(a.b, b.b));
+	return fix14_mul((cpfmax(a.r, b.r) - cpfmin(a.l, b.l)), (cpfmax(a.t, b.t) - cpfmin(a.b, b.b)));
 }
 
 /// Returns the fraction along the segment query the cpBB is hit. Returns INFINITY if it doesn't hit.
@@ -117,26 +117,26 @@ static inline cpFloat cpBBSegmentQuery(cpBB bb, cpVect a, cpVect b)
 	cpVect delta = cpvsub(b, a);
 	cpFloat tmin = -INFINITY, tmax = INFINITY;
 	
-	if(delta.x == 0.0f){
+	if(delta.x == 0){
 		if(a.x < bb.l || bb.r < a.x) return INFINITY;
 	} else {
-		cpFloat t1 = (bb.l - a.x)/delta.x;
-		cpFloat t2 = (bb.r - a.x)/delta.x;
+		cpFloat t1 = fix14_div((bb.l - a.x), delta.x);
+		cpFloat t2 = fix14_div((bb.r - a.x), delta.x);
 		tmin = cpfmax(tmin, cpfmin(t1, t2));
 		tmax = cpfmin(tmax, cpfmax(t1, t2));
 	}
 	
-	if(delta.y == 0.0f){
+	if(delta.y == 0){
 		if(a.y < bb.b || bb.t < a.y) return INFINITY;
 	} else {
-		cpFloat t1 = (bb.b - a.y)/delta.y;
-		cpFloat t2 = (bb.t - a.y)/delta.y;
+		cpFloat t1 = fix14_div((bb.b - a.y), delta.y);
+		cpFloat t2 = fix14_div((bb.t - a.y), delta.y);
 		tmin = cpfmax(tmin, cpfmin(t1, t2));
 		tmax = cpfmin(tmax, cpfmax(t1, t2));
 	}
 	
-	if(tmin <= tmax && 0.0f <= tmax && tmin <= 1.0f){
-		return cpfmax(tmin, 0.0f);
+	if(tmin <= tmax && 0 <= tmax && tmin <= int_to_fix14(1)){
+		return cpfmax(tmin, 0);
 	} else {
 		return INFINITY;
 	}
@@ -161,11 +161,11 @@ cpBBWrapVect(const cpBB bb, const cpVect v)
 {
 	cpFloat dx = cpfabs(bb.r - bb.l);
 	cpFloat modx = cpfmod(v.x - bb.l, dx);
-	cpFloat x = (modx > 0.0f) ? modx : modx + dx;
+	cpFloat x = (modx > 0) ? modx : modx + dx;
 	
 	cpFloat dy = cpfabs(bb.t - bb.b);
 	cpFloat mody = cpfmod(v.y - bb.b, dy);
-	cpFloat y = (mody > 0.0f) ? mody : mody + dy;
+	cpFloat y = (mody > 0) ? mody : mody + dy;
 	
 	return cpv(x + bb.l, y + bb.b);
 }

@@ -42,13 +42,13 @@ preStep(cpGrooveJoint *joint, cpFloat dt)
 	cpFloat td = cpvcross(cpvadd(b->p, joint->r2), n);
 	// calculate clamping factor and r2
 	if(td <= cpvcross(ta, n)){
-		joint->clamp = 1.0f;
+		joint->clamp = int_to_fix14(1);
 		joint->r1 = cpvsub(ta, a->p);
 	} else if(td >= cpvcross(tb, n)){
-		joint->clamp = -1.0f;
+		joint->clamp = -int_to_fix14(1);
 		joint->r1 = cpvsub(tb, a->p);
 	} else {
-		joint->clamp = 0.0f;
+		joint->clamp = 0;
 		joint->r1 = cpvsub(cpvadd(cpvmult(cpvperp(n), -td), cpvmult(n, d)), a->p);
 	}
 	
@@ -72,8 +72,8 @@ applyCachedImpulse(cpGrooveJoint *joint, cpFloat dt_coef)
 static inline cpVect
 grooveConstrain(cpGrooveJoint *joint, cpVect j, cpFloat dt){
 	cpVect n = joint->grv_tn;
-	cpVect jClamp = (joint->clamp*cpvcross(j, n) > 0.0f) ? j : cpvproject(j, n);
-	return cpvclamp(jClamp, joint->constraint.maxForce*dt);
+	cpVect jClamp = (fix14_mul(joint->clamp, cpvcross(j, n)) > 0) ? j : cpvproject(j, n);
+	return cpvclamp(jClamp, fix14_mul(joint->constraint.maxForce, dt));
 }
 
 static void

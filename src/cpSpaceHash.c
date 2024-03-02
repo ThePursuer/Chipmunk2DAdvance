@@ -235,18 +235,18 @@ static inline int
 floor_int(cpFloat f)
 {
 	int i = (int)f;
-	return (f < 0.0f && f != i ? i - 1 : i);
+	return (f < 0 && f != i ? i - 1 : i);
 }
 
 static inline void
 hashHandle(cpSpaceHash *hash, cpHandle *hand, cpBB bb)
 {
 	// Find the dimensions in cell coordinates.
-	cpFloat dim = hash->celldim;
-	int l = floor_int(bb.l/dim); // Fix by ShiftZ
-	int r = floor_int(bb.r/dim);
-	int b = floor_int(bb.b/dim);
-	int t = floor_int(bb.t/dim);
+	cpFloat dim = fix14_inverse(hash->celldim);
+	int l = floor_int(fix14_mul(bb.l, dim)); // Fix by ShiftZ
+	int r = floor_int(fix14_mul(bb.r, dim));
+	int b = floor_int(fix14_mul(bb.b, dim));
+	int t = floor_int(fix14_mul(bb.t, dim));
 	
 	int n = hash->numcells;
 	for(int i=l; i<=r; i++){
@@ -377,11 +377,11 @@ static void
 cpSpaceHashQuery(cpSpaceHash *hash, void *obj, cpBB bb, cpSpatialIndexQueryFunc func, void *data)
 {
 	// Get the dimensions in cell coordinates.
-	cpFloat dim = hash->celldim;
-	int l = floor_int(bb.l/dim);  // Fix by ShiftZ
-	int r = floor_int(bb.r/dim);
-	int b = floor_int(bb.b/dim);
-	int t = floor_int(bb.t/dim);
+	cpFloat dim = fix14_inverse(hash->celldim);
+	int l = floor_int(fix14_mul(bb.l, dim));  // Fix by ShiftZ
+	int r = floor_int(fix14_mul(bb.r, dim));
+	int b = floor_int(fix14_mul(bb.b, dim));
+	int t = floor_int(fix14_mul(bb.t, dim));
 	
 	int n = hash->numcells;
 	cpSpaceHashBin **table = hash->table;
@@ -411,16 +411,16 @@ queryRehash_helper(cpHandle *hand, queryRehashContext *context)
 	cpSpatialIndexQueryFunc func = context->func;
 	void *data = context->data;
 
-	cpFloat dim = hash->celldim;
+	cpFloat dim = fix14_inverse(hash->celldim);
 	int n = hash->numcells;
 
 	void *obj = hand->obj;
 	cpBB bb = hash->spatialIndex.bbfunc(obj);
 
-	int l = floor_int(bb.l/dim);
-	int r = floor_int(bb.r/dim);
-	int b = floor_int(bb.b/dim);
-	int t = floor_int(bb.t/dim);
+	int l = floor_int(fix14_mul(bb.l, dim));
+	int r = floor_int(fix14_mul(bb.r, dim));
+	int b = floor_int(fix14_mul(bb.b, dim));
+	int t = floor_int(fix14_mul(bb.t, dim));
 	
 	cpSpaceHashBin **table = hash->table;
 
@@ -487,8 +487,8 @@ segmentQuery_helper(cpSpaceHash *hash, cpSpaceHashBin **bin_ptr, void *obj, cpSp
 static void
 cpSpaceHashSegmentQuery(cpSpaceHash *hash, void *obj, cpVect a, cpVect b, cpFloat t_exit, cpSpatialIndexSegmentQueryFunc func, void *data)
 {
-	a = cpvmult(a, 1.0f/hash->celldim);
-	b = cpvmult(b, 1.0f/hash->celldim);
+	a = cpvmult(a, fix14_inverse(hash->celldim));
+	b = cpvmult(b, fix14_inverse(hash->celldim));
 	
 	int cell_x = floor_int(a.x), cell_y = floor_int(a.y);
 
@@ -499,7 +499,7 @@ cpSpaceHashSegmentQuery(cpSpaceHash *hash, void *obj, cpVect a, cpVect b, cpFloa
 
 	if (b.x > a.x){
 		x_inc = 1;
-		temp_h = (cpffloor(a.x + 1.0f) - a.x);
+		temp_h = (cpffloor(a.x + int_to_fix14(1)) - a.x);
 	} else {
 		x_inc = -1;
 		temp_h = (a.x - cpffloor(a.x));
@@ -507,7 +507,7 @@ cpSpaceHashSegmentQuery(cpSpaceHash *hash, void *obj, cpVect a, cpVect b, cpFloa
 
 	if (b.y > a.y){
 		y_inc = 1;
-		temp_v = (cpffloor(a.y + 1.0f) - a.y);
+		temp_v = (cpffloor(a.y + int_to_fix14(1)) - a.y);
 	} else {
 		y_inc = -1;
 		temp_v = (a.y - cpffloor(a.y));
@@ -515,11 +515,11 @@ cpSpaceHashSegmentQuery(cpSpaceHash *hash, void *obj, cpVect a, cpVect b, cpFloa
 	
 	// Division by zero is *very* slow on ARM
 	cpFloat dx = cpfabs(b.x - a.x), dy = cpfabs(b.y - a.y);
-	cpFloat dt_dx = (dx ? 1.0f/dx : INFINITY), dt_dy = (dy ? 1.0f/dy : INFINITY);
+	cpFloat dt_dx = (dx ? fix14_inverse(dx) : INFINITY), dt_dy = (dy ? fix14_inverse(dy) : INFINITY);
 	
 	// fix NANs in horizontal directions
-	cpFloat next_h = (temp_h ? temp_h*dt_dx : dt_dx);
-	cpFloat next_v = (temp_v ? temp_v*dt_dy : dt_dy);
+	cpFloat next_h = (temp_h ? fix14_mul(temp_h, dt_dx) : dt_dx);
+	cpFloat next_v = (temp_v ? fix14_mul(temp_v, dt_dy) : dt_dy);
 	
 	int n = hash->numcells;
 	cpSpaceHashBin **table = hash->table;
@@ -589,46 +589,3 @@ static cpSpatialIndexClass klass = {
 };
 
 static inline cpSpatialIndexClass *Klass(){return &klass;}
-
-//MARK: Debug Drawing
-
-//#define CP_BBTREE_DEBUG_DRAW
-#ifdef CP_BBTREE_DEBUG_DRAW
-#include "OpenGL/gl.h"
-#include "OpenGL/glu.h"
-#include <GLUT/glut.h>
-
-void
-cpSpaceHashRenderDebug(cpSpatialIndex *index)
-{
-	if(index->klass != &klass){
-		cpAssertWarn(cpFalse, "Ignoring cpSpaceHashRenderDebug() call to non-spatial hash spatial index.");
-		return;
-	}
-	
-	cpSpaceHash *hash = (cpSpaceHash *)index;
-	cpBB bb = cpBBNew(-320, -240, 320, 240);
-	
-	cpFloat dim = hash->celldim;
-	int n = hash->numcells;
-	
-	int l = (int)floor(bb.l/dim);
-	int r = (int)floor(bb.r/dim);
-	int b = (int)floor(bb.b/dim);
-	int t = (int)floor(bb.t/dim);
-	
-	for(int i=l; i<=r; i++){
-		for(int j=b; j<=t; j++){
-			int cell_count = 0;
-			
-			int index = hash_func(i,j,n);
-			for(cpSpaceHashBin *bin = hash->table[index]; bin; bin = bin->next)
-				cell_count++;
-			
-			GLfloat v = 1.0f - (GLfloat)cell_count/10.0f;
-			glColor3f(v,v,v);
-			glRectf(i*dim, j*dim, (i + 1)*dim, (j + 1)*dim);
-		}
-	}
-}
-#endif

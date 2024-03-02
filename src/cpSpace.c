@@ -131,10 +131,10 @@ cpSpaceInit(cpSpace *space)
 	space->iterations = 10;
 	
 	space->gravity = cpvzero;
-	space->damping = 1.0f;
+	space->damping = int_to_fix14(1);
 	
-	space->collisionSlop = 0.1f;
-	space->collisionBias = cpfpow(1.0f - 0.1f, 60.0f);
+	space->collisionSlop = fix14_inverse(int_to_fix14(10));
+	space->collisionBias = cpfpow(int_to_fix14(1) - fix14_inverse(int_to_fix14(10)), int_to_fix14(60));
 	space->collisionPersistence = 3;
 	
 	space->locked = 0;
@@ -153,7 +153,7 @@ cpSpaceInit(cpSpace *space)
 	space->rousedBodies = cpArrayNew(0);
 	
 	space->sleepTimeThreshold = INFINITY;
-	space->idleSpeedThreshold = 0.0f;
+	space->idleSpeedThreshold = 0;
 	
 	space->arbiters = cpArrayNew(0);
 	space->pooledArbiters = cpArrayNew(0);
@@ -170,7 +170,7 @@ cpSpaceInit(cpSpace *space)
 	space->postStepCallbacks = cpArrayNew(0);
 	space->skipPostStep = cpFalse;
 	
-	cpBody *staticBody = cpBodyInit(&space->_staticBody, 0.0f, 0.0f);
+	cpBody *staticBody = cpBodyInit(&space->_staticBody, 0, 0);
 	cpBodySetType(staticBody, CP_BODY_TYPE_STATIC);
 	cpSpaceSetStaticBody(space, staticBody);
 	
@@ -271,7 +271,7 @@ cpSpaceGetDamping(const cpSpace *space)
 void
 cpSpaceSetDamping(cpSpace *space, cpFloat damping)
 {
-	cpAssertHard(damping >= 0.0, "Damping must be positive.");
+	cpAssertHard(damping >= 0, "Damping must be positive.");
 	space->damping = damping;
 }
 

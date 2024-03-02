@@ -33,23 +33,23 @@ preStep(cpRatchetJoint *joint, cpFloat dt)
 	
 	cpFloat delta = b->a - a->a;
 	cpFloat diff = angle - delta;
-	cpFloat pdist = 0.0f;
+	cpFloat pdist = 0;
 	
-	if(diff*ratchet > 0.0f){
+	if(diff*ratchet > 0){
 		pdist = diff;
 	} else {
-		joint->angle = cpffloor((delta - phase)/ratchet)*ratchet + phase;
+		joint->angle = fix14_mul(cpffloor(fix14_div((delta - phase), ratchet)), ratchet) + phase;
 	}
 	
 	// calculate moment of inertia coefficient.
-	joint->iSum = 1.0f/(a->i_inv + b->i_inv);
+	joint->iSum = fix14_inverse((a->i_inv + b->i_inv));
 	
 	// calculate bias velocity
 	cpFloat maxBias = joint->constraint.maxBias;
-	joint->bias = cpfclamp(-bias_coef(joint->constraint.errorBias, dt)*pdist/dt, -maxBias, maxBias);
+	joint->bias = cpfclamp(fix14_div(fix14_mul(-bias_coef(joint->constraint.errorBias, dt), pdist), dt), -maxBias, maxBias);
 
 	// If the bias is 0, the joint is not at a limit. Reset the impulse.
-	if(!joint->bias) joint->jAcc = 0.0f;
+	if(!joint->bias) joint->jAcc = 0;
 }
 
 static void
@@ -58,9 +58,9 @@ applyCachedImpulse(cpRatchetJoint *joint, cpFloat dt_coef)
 	cpBody *a = joint->constraint.a;
 	cpBody *b = joint->constraint.b;
 	
-	cpFloat j = joint->jAcc*dt_coef;
-	a->w -= j*a->i_inv;
-	b->w += j*b->i_inv;
+	cpFloat j = fix14_mul(joint->jAcc, dt_coef);
+	a->w -= fix14_mul(j, a->i_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static void
@@ -75,17 +75,17 @@ applyImpulse(cpRatchetJoint *joint, cpFloat dt)
 	cpFloat wr = b->w - a->w;
 	cpFloat ratchet = joint->ratchet;
 	
-	cpFloat jMax = joint->constraint.maxForce*dt;
+	cpFloat jMax = fix14_mul(joint->constraint.maxForce, dt);
 	
 	// compute normal impulse	
-	cpFloat j = -(joint->bias + wr)*joint->iSum;
+	cpFloat j = fix14_mul(-(joint->bias + wr), joint->iSum);
 	cpFloat jOld = joint->jAcc;
-	joint->jAcc = cpfclamp((jOld + j)*ratchet, 0.0f, jMax*cpfabs(ratchet))/ratchet;
+	joint->jAcc = fix14_div(cpfclamp(fix14_mul((jOld + j), ratchet), 0, fix14_mul(jMax, cpfabs(ratchet))), ratchet);
 	j = joint->jAcc - jOld;
 	
 	// apply impulse
-	a->w -= j*a->i_inv;
-	b->w += j*b->i_inv;
+	a->w -= fix14_mul(j, a->i_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static cpFloat
@@ -112,12 +112,12 @@ cpRatchetJointInit(cpRatchetJoint *joint, cpBody *a, cpBody *b, cpFloat phase, c
 {
 	cpConstraintInit((cpConstraint *)joint, &klass, a, b);
 	
-	joint->angle = 0.0f;
+	joint->angle = 0;
 	joint->phase = phase;
 	joint->ratchet = ratchet;
 	
 	// STATIC_BODY_CHECK
-	joint->angle = (b ? b->a : 0.0f) - (a ? a->a : 0.0f);
+	joint->angle = (b ? b->a : 0) - (a ? a->a : 0);
 	
 	return joint;
 }

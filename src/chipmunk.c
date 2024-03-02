@@ -63,39 +63,39 @@ const char *cpVersionString = XSTR(CP_VERSION_MAJOR) "." XSTR(CP_VERSION_MINOR) 
 cpFloat
 cpMomentForCircle(cpFloat m, cpFloat r1, cpFloat r2, cpVect offset)
 {
-	return m*(0.5f*(r1*r1 + r2*r2) + cpvlengthsq(offset));
+	return fix14_mul(m, (fix14_mul(8192, (fix14_mul(r1, r1) + fix14_mul(r2, r2))) + cpvlengthsq(offset)));
 }
 
 cpFloat
 cpAreaForCircle(cpFloat r1, cpFloat r2)
 {
-	return (cpFloat)CP_PI*cpfabs(r1*r1 - r2*r2);
+	return fix14_mul((cpFloat)CP_PI, cpfabs(fix14_mul(r1, r1) - fix14_mul(r2, r2)));
 }
 
 cpFloat
 cpMomentForSegment(cpFloat m, cpVect a, cpVect b, cpFloat r)
 {
-	cpVect offset = cpvlerp(a, b, 0.5f);
+	cpVect offset = cpvlerp(a, b, 8192);
 	
 	// This approximates the shape as a box for rounded segments, but it's quite close.
-	cpFloat length = cpvdist(b, a) + 2.0f*r;
-	return m*((length*length + 4.0f*r*r)/12.0f + cpvlengthsq(offset));
+	cpFloat length = cpvdist(b, a) + (r << 1);
+	return fix14_mul(m, (fix14_div((fix14_mul(length, length) + fix14_mul(fix14_mul(int_to_fix14(4), r), r)), int_to_fix14(12)) + cpvlengthsq(offset)));
 }
 
 cpFloat
 cpAreaForSegment(cpVect a, cpVect b, cpFloat r)
 {
-	return r*((cpFloat)CP_PI*r + 2.0f*cpvdist(a, b));
+	return fix14_mul(r, (fix14_mul((cpFloat)CP_PI, r) + (cpvdist(a, b) << 1)));
 }
 
 cpFloat
 cpMomentForPoly(cpFloat m, int count, const cpVect *verts, cpVect offset, cpFloat r)
 {
 	// TODO account for radius.
-	if(count == 2) return cpMomentForSegment(m, verts[0], verts[1], 0.0f);
+	if(count == 2) return cpMomentForSegment(m, verts[0], verts[1], 0);
 	
-	cpFloat sum1 = 0.0f;
-	cpFloat sum2 = 0.0f;
+	cpFloat sum1 = 0;
+	cpFloat sum2 = 0;
 	for(int i=0; i<count; i++){
 		cpVect v1 = cpvadd(verts[i], offset);
 		cpVect v2 = cpvadd(verts[(i+1)%count], offset);
@@ -103,18 +103,18 @@ cpMomentForPoly(cpFloat m, int count, const cpVect *verts, cpVect offset, cpFloa
 		cpFloat a = cpvcross(v2, v1);
 		cpFloat b = cpvdot(v1, v1) + cpvdot(v1, v2) + cpvdot(v2, v2);
 		
-		sum1 += a*b;
+		sum1 += fix14_mul(a, b);
 		sum2 += a;
 	}
 	
-	return (m*sum1)/(6.0f*sum2);
+	return fix14_div(fix14_mul(m, sum1), fix14_mul(int_to_fix14(6), sum2));
 }
 
 cpFloat
 cpAreaForPoly(const int count, const cpVect *verts, cpFloat r)
 {
-	cpFloat area = 0.0f;
-	cpFloat perimeter = 0.0f;
+	cpFloat area = 0;
+	cpFloat perimeter = 0;
 	for(int i=0; i<count; i++){
 		cpVect v1 = verts[i];
 		cpVect v2 = verts[(i+1)%count];
@@ -123,13 +123,13 @@ cpAreaForPoly(const int count, const cpVect *verts, cpFloat r)
 		perimeter += cpvdist(v1, v2);
 	}
 	
-	return r*(CP_PI*cpfabs(r) + perimeter) + area/2.0f;
+	return fix14_mul(r, (fix14_mul(CP_PI, cpfabs(r)) + perimeter)) + (area >> 1);
 }
 
 cpVect
 cpCentroidForPoly(const int count, const cpVect *verts)
 {
-	cpFloat sum = 0.0f;
+	cpFloat sum = 0;
 	cpVect vsum = cpvzero;
 	
 	for(int i=0; i<count; i++){
@@ -141,7 +141,7 @@ cpCentroidForPoly(const int count, const cpVect *verts)
 		vsum = cpvadd(vsum, cpvmult(cpvadd(v1, v2), cross));
 	}
 	
-	return cpvmult(vsum, 1.0f/(3.0f*sum));
+	return cpvmult(vsum, fix14_inverse(fix14_mul(int_to_fix14(3), sum)));
 }
 
 //void
@@ -156,7 +156,7 @@ cpCentroidForPoly(const int count, const cpVect *verts)
 cpFloat
 cpMomentForBox(cpFloat m, cpFloat width, cpFloat height)
 {
-	return m*(width*width + height*height)/12.0f;
+	return fix14_div(fix14_mul(m, (fix14_mul(width, width) + fix14_mul(height, height))), int_to_fix14(12));
 }
 
 cpFloat
@@ -164,10 +164,10 @@ cpMomentForBox2(cpFloat m, cpBB box)
 {
 	cpFloat width = box.r - box.l;
 	cpFloat height = box.t - box.b;
-	cpVect offset = cpvmult(cpv(box.l + box.r, box.b + box.t), 0.5f);
+	cpVect offset = cpvmult(cpv(box.l + box.r, box.b + box.t), 8192);
 	
 	// TODO: NaN when offset is 0 and m is INFINITY
-	return cpMomentForBox(m, width, height) + m*cpvlengthsq(offset);
+	return cpMomentForBox(m, width, height) + fix14_mul(m, cpvlengthsq(offset));
 }
 
 //MARK: Quick Hull
@@ -203,7 +203,7 @@ QHullPartition(cpVect *verts, int count, cpVect a, cpVect b, cpFloat tol)
 	int pivot = 0;
 	
 	cpVect delta = cpvsub(b, a);
-	cpFloat valueTol = tol*cpvlength(delta);
+	cpFloat valueTol = fix14_mul(tol, cpvlength(delta));
 	
 	int head = 0;
 	for(int tail = count-1; head <= tail;){

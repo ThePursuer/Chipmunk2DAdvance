@@ -23,73 +23,22 @@
 #define CHIPMUNK_TYPES_H
 
 #include <stdint.h>
-#include <float.h>
 #include <math.h>
 
-#ifdef __APPLE__
-   #include "TargetConditionals.h"
-#endif
+#include "fix14.h"
 
-// Use CGTypes by default on iOS and Mac.
-// Also enables usage of doubles on 64 bit.
-// Performance is usually very comparable when the CPU cache is well utilised.
-#if (TARGET_OS_IPHONE || TARGET_OS_MAC) && (!defined CP_USE_CGTYPES)
-	#define CP_USE_CGTYPES 1
-#endif
-
-#if CP_USE_CGTYPES
-	#if TARGET_OS_IPHONE
-		#include <CoreGraphics/CGGeometry.h>
-		#include <CoreGraphics/CGAffineTransform.h>
-	#elif TARGET_OS_MAC
-		#include <ApplicationServices/ApplicationServices.h>
-	#endif
-	
-	#if defined(__LP64__) && __LP64__
-		#define CP_USE_DOUBLES 1
-	#else
-		#define CP_USE_DOUBLES 0
-	#endif
-#endif
-
-#ifndef CP_USE_DOUBLES
-	// Use doubles by default for higher precision.
-	#define CP_USE_DOUBLES 1
-#endif
-
-/// @defgroup basicTypes Basic Types
-/// Most of these types can be configured at compile time.
-/// @{
-
-#if CP_USE_DOUBLES
-/// Chipmunk's floating point type.
-/// Can be reconfigured at compile time.
-	typedef double cpFloat;
-	#define cpfsqrt sqrt
-	#define cpfsin sin
-	#define cpfcos cos
-	#define cpfacos acos
-	#define cpfatan2 atan2
-	#define cpfmod fmod
-	#define cpfexp exp
-	#define cpfpow pow
-	#define cpffloor floor
-	#define cpfceil ceil
-	#define CPFLOAT_MIN DBL_MIN
-#else
-	typedef float cpFloat;
-	#define cpfsqrt sqrtf
-	#define cpfsin sinf
-	#define cpfcos cosf
-	#define cpfacos acosf
-	#define cpfatan2 atan2f
-	#define cpfmod fmodf
-	#define cpfexp expf
-	#define cpfpow powf
-	#define cpffloor floorf
-	#define cpfceil ceilf
-	#define CPFLOAT_MIN FLT_MIN
-#endif
+typedef fix14_t cpFloat;
+#define cpfsqrt sqrtf
+#define cpfsin sinf
+#define cpfcos cosf
+#define cpfacos acosf
+#define cpfatan2 atan2f
+#define cpfmod fmodf
+#define cpfexp expf
+#define cpfpow powf
+#define cpffloor floorf
+#define cpfceil ceilf
+#define CPFLOAT_MIN FLT_MIN
 
 #ifndef INFINITY
 	#ifdef _MSC_VER
@@ -111,9 +60,7 @@
 	#endif
 #endif
 
-
-#define CP_PI ((cpFloat)3.14159265358979323846264338327950288)
-
+#define CP_PI ((cpFloat)51472)
 
 /// Return the max of two cpFloats.
 static inline cpFloat cpfmax(cpFloat a, cpFloat b)
@@ -150,7 +97,7 @@ static inline cpFloat cpfclamp01(cpFloat f)
 /// Linearly interpolate (or extrapolate) between @c f1 and @c f2 by @c t percent.
 static inline cpFloat cpflerp(cpFloat f1, cpFloat f2, cpFloat t)
 {
-	return f1*(1.0f - t) + f2*t;
+	return fix14_mul(f1, (int_to_fix14(1) - t)) + fix14_mul(f2, t);
 }
 
 /// Linearly interpolate from @c f1 to @c f2 by no more than @c d.

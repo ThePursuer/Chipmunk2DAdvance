@@ -25,6 +25,8 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include "fix14.h"
+
 #ifndef alloca
 	#ifdef _WIN32
 		#include <malloc.h>

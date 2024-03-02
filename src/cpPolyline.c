@@ -112,7 +112,7 @@ cpPolylineIsClosed(cpPolyline *line)
 static cpBool
 cpPolylineIsShort(cpVect *points, int count, int start, int end, cpFloat min)
 {
-  cpFloat length = 0.0f;
+  cpFloat length = 0;
 	for(int i=start; i!=end; i=Next(i, count)){
 		length += cpvdist(points[i], points[Next(i, count)]);
 		if(length > min) return cpFalse;
@@ -179,7 +179,7 @@ DouglasPeucker(
 	if(cpvnear(a, b, min) && cpPolylineIsShort(verts, length, start, end, min)) return reduced;
 	
 	// Find the maximal vertex to split and recurse on
-	cpFloat max = 0.0;
+	cpFloat max = 0;
 	int maxi = start;
 	
 	cpVect n = cpvnormalize(cpvperp(cpvsub(b, a)));
@@ -211,7 +211,7 @@ cpPolylineSimplifyCurves(cpPolyline *line, cpFloat tol)
 {
 	cpPolyline *reduced = cpPolylineMake(line->count);
 	
-	cpFloat min = tol/2.0f;
+	cpFloat min = (tol >> 1);
   
   if(cpPolylineIsClosed(line)){
 		int start, end;
@@ -408,11 +408,11 @@ FindSteiner(int count, cpVect *verts, struct Notch notch)
 		
 		cpFloat thing_a = cpvcross(notch.n, cpvsub(seg_a, notch.v));
 		cpFloat thing_b = cpvcross(notch.n, cpvsub(seg_b, notch.v));
-		if(thing_a*thing_b <= 0.0){
-			cpFloat t = thing_a/(thing_a - thing_b);
+		if(fix14_mul(thing_a, thing_b) <= 0){
+			cpFloat t = fix14_div(thing_a, (thing_a - thing_b));
 			cpFloat dist = cpvdot(notch.n, cpvsub(cpvlerp(seg_a, seg_b, t), notch.v));
 			
-			if(dist >= 0.0 && dist <= min){
+			if(dist >= 0 && dist <= min){
 				min = dist;
 				feature = index + t;
 			}
@@ -421,142 +421,6 @@ FindSteiner(int count, cpVect *verts, struct Notch notch)
 	
 	return feature;
 }
-
-//static cpFloat
-//FindSteiner2(cpVect *verts, int count, struct Notch notch)
-//{
-//	cpVect a = verts[(notch.i + count - 1)%count];
-//	cpVect b = verts[(notch.i + 1)%count];
-//	cpVect n = cpvnormalize(cpvadd(cpvnormalize(cpvsub(notch.v, a)), cpvnormalize(cpvsub(notch.v, b))));
-//	
-//	cpFloat min = INFINITY;
-//	cpFloat feature = -1.0;
-//	
-//	for(int i=1; i<count-1; i++){
-//		int index = (notch.i + i)%count;
-//		
-//		cpVect seg_a = verts[index];
-//		cpVect seg_b = verts[Next(index, count)];
-//		
-//		cpFloat thing_a = cpvcross(n, cpvsub(seg_a, notch.v));
-//		cpFloat thing_b = cpvcross(n, cpvsub(seg_b, notch.v));
-//		if(thing_a*thing_b <= 0.0){
-//			cpFloat t = thing_a/(thing_a - thing_b);
-//			cpFloat dist = cpvdot(n, cpvsub(cpvlerp(seg_a, seg_b, t), notch.v));
-//			
-//			if(dist >= 0.0 && dist <= min){
-//				min = dist;
-//				feature = index + t;
-//			}
-//		}
-//	}
-//	
-//	cpAssertSoft(feature >= 0.0, "No closest features detected. This is likely due to a self intersecting polygon.");
-//	return feature;
-//}
-
-//struct Range {cpFloat min, max;};
-//static inline struct Range
-//clip_range(cpVect delta_a, cpVect delta_b, cpVect clip)
-//{
-//	cpFloat da = cpvcross(delta_a, clip);
-//	cpFloat db = cpvcross(delta_b, clip);
-//	cpFloat clamp = da/(da - db);
-//	if(da > db){
-//		return (struct Range){-INFINITY, clamp};
-//	} else if(da < db){
-//		return (struct Range){clamp, INFINITY};
-//	} else {
-//		return (struct Range){-INFINITY, INFINITY};
-//	}
-//}
-//
-//static cpFloat
-//FindSteiner3(cpVect *verts, int count, struct Notch notch)
-//{
-//	cpFloat min = INFINITY;
-//	cpFloat feature = -1.0;
-//	
-//	cpVect support_a = verts[(notch.i - 1 + count)%count];
-//	cpVect support_b = verts[(notch.i + 1)%count];
-//	
-//	cpVect clip_a = cpvlerp(support_a, support_b, 0.1);
-//	cpVect clip_b = cpvlerp(support_b, support_b, 0.9);
-//	
-//	for(int i=1; i<count - 1; i++){
-//		int index = (notch.i + i)%count;
-//		cpVect seg_a = verts[index];
-//		cpVect seg_b = verts[Next(index, count)];
-//		
-//		cpVect delta_a = cpvsub(seg_a, notch.v);
-//		cpVect delta_b = cpvsub(seg_b, notch.v);
-//		
-//		// Ignore if the segment faces away from the point.
-//		if(cpvcross(delta_b, delta_a) > 0.0){
-//			struct Range range1 = clip_range(delta_a, delta_b, cpvsub(notch.v, clip_a));
-//			struct Range range2 = clip_range(delta_a, delta_b, cpvsub(clip_b, notch.v));
-//			
-//			cpFloat min_t = cpfmax(0.0, cpfmax(range1.min, range2.min));
-//			cpFloat max_t = cpfmin(1.0, cpfmin(range1.max, range2.max));
-//			
-//			// Ignore if the segment has been completely clipped away.
-//			if(min_t < max_t){
-//				cpVect seg_delta = cpvsub(seg_b, seg_a);
-//				cpFloat closest_t = cpfclamp(cpvdot(seg_delta, cpvsub(notch.v, seg_a))/cpvlengthsq(seg_delta), min_t, max_t);
-//				cpVect closest = cpvlerp(seg_a, seg_b, closest_t);
-//				
-//				cpFloat dist = cpvdistsq(notch.v, closest);
-//				if(dist < min){
-//					min = dist;
-//					feature = index + closest_t;
-//				}
-//			}
-//		}
-//	}
-//	
-//	cpAssertWarn(feature >= 0.0, "Internal Error: No closest features detected.");
-//	return feature;
-//}
-
-//static cpBool
-//VertexUnobscured(int count, cpVect *verts, int index, int notch_i)
-//{
-//	cpVect v = verts[notch_i];
-//	cpVect n = cpvnormalize(cpvsub(verts[index], v));
-//	
-//	for(int i=0; i<count; i++){
-//		if(i == index || i == Next(i, count) || i == notch_i || i == Next(notch_i, count)) continue;
-//		
-//		cpVect seg_a = verts[i];
-//		cpVect seg_b = verts[Next(i, count)];
-//		
-//		cpFloat thing_a = cpvcross(n, cpvsub(seg_a, v));
-//		cpFloat thing_b = cpvcross(n, cpvsub(seg_b, v));
-//		if(thing_a*thing_b <= 0.0) return cpTrue;
-//	}
-//	
-//	return cpFalse;
-//}
-//
-//static cpFloat
-//FindSteiner4(int count, cpVect *verts, struct Notch notch, cpFloat *convexity)
-//{
-//	cpFloat min = INFINITY;
-//	cpFloat feature = -1.0;
-//	
-//	for(int i=Next(notch.b, count); i!=notch.a; i=Next(i, count)){
-//		cpVect v = verts[i];
-//		cpFloat weight = (1.0 + 0.1*convexity[i])/(1.0*cpvdist(notch.v, v));
-//		
-//		if(weight <= min && VertexUnobscured(count, verts, i, notch.i)){
-//			min = weight;
-//			feature = i;
-//		}
-//	}
-//	
-//	cpAssertSoft(feature >= 0.0, "No closest features detected. This is likely due to a self intersecting polygon.");
-//	return feature;
-//}
 
 static struct Notch
 DeepestNotch(int count, cpVect *verts, int hullCount, cpVect *hullVerts, int first, cpFloat tol)
@@ -600,7 +464,7 @@ ApproximateConcaveDecomposition(cpVect *verts, int count, cpFloat tol, cpPolylin
 {
 	int first;
 	cpVect *hullVerts = (cpVect*) alloca(count*sizeof(cpVect));
-	int hullCount = cpConvexHull(count, verts, hullVerts, &first, 0.0);
+	int hullCount = cpConvexHull(count, verts, hullVerts, &first, 0);
 	
 	if(hullCount != count){
 		struct Notch notch = DeepestNotch(count, verts, hullCount, hullVerts, first, tol);
@@ -608,7 +472,7 @@ ApproximateConcaveDecomposition(cpVect *verts, int count, cpFloat tol, cpPolylin
 		if(notch.d > tol){
 			cpFloat steiner_it = FindSteiner(count, verts, notch);
 			
-			if(steiner_it >= 0.0){
+			if(steiner_it >= 0){
 				int steiner_i = (int)steiner_it;
 				cpVect steiner = cpvlerp(verts[steiner_i], verts[Next(steiner_i, count)], steiner_it - steiner_i);
 				
@@ -643,7 +507,7 @@ cpPolylineSet *
 cpPolylineConvexDecomposition_BETA(cpPolyline *line, cpFloat tol)
 {
 	cpAssertSoft(cpPolylineIsClosed(line), "Cannot decompose an open polygon.");
-	cpAssertSoft(cpAreaForPoly(line->count, line->verts, 0.0) >= 0.0, "Winding is backwards. (Are you passing a hole?)");
+	cpAssertSoft(cpAreaForPoly(line->count, line->verts, 0) >= 0, "Winding is backwards. (Are you passing a hole?)");
 	
 	cpPolylineSet *set = cpPolylineSetNew();
 	ApproximateConcaveDecomposition(line->verts, line->count - 1, tol, set);

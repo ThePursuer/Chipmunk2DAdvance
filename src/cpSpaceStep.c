@@ -336,7 +336,7 @@ void
 cpSpaceStep(cpSpace *space, cpFloat dt)
 {
 	// don't step if the timestep is 0!
-	if(dt == 0.0f) return;
+	if(dt == 0) return;
 	
 	space->stamp++;
 	
@@ -404,7 +404,7 @@ cpSpaceStep(cpSpace *space, cpFloat dt)
 		}
 		
 		// Apply cached impulses
-		cpFloat dt_coef = (prev_dt == 0.0f ? 0.0f : dt/prev_dt);
+		cpFloat dt_coef = (prev_dt == 0 ? 0 : fix14_div(dt, prev_dt));
 		for(int i=0; i<arbiters->num; i++){
 			cpArbiterApplyCachedImpulse((cpArbiter *)arbiters->arr[i], dt_coef);
 		}

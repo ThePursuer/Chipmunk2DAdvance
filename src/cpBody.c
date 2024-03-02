@@ -43,24 +43,24 @@ cpBodyInit(cpBody *body, cpFloat mass, cpFloat moment)
 	
 	body->sleeping.root = NULL;
 	body->sleeping.next = NULL;
-	body->sleeping.idleTime = 0.0f;
+	body->sleeping.idleTime = 0;
 	
 	body->p = cpvzero;
 	body->v = cpvzero;
 	body->f = cpvzero;
 	
-	body->w = 0.0f;
-	body->t = 0.0f;
+	body->w = 0;
+	body->t = 0;
 	
 	body->v_bias = cpvzero;
-	body->w_bias = 0.0f;
+	body->w_bias = 0;
 	
 	body->userData = NULL;
 	
 	// Setters must be called after full initialization so the sanity checks don't assert on garbage data.
 	cpBodySetMass(body, mass);
 	cpBodySetMoment(body, moment);
-	cpBodySetAngle(body, 0.0f);
+	cpBodySetAngle(body, 0);
 	
 	return body;
 }
@@ -74,7 +74,7 @@ cpBodyNew(cpFloat mass, cpFloat moment)
 cpBody*
 cpBodyNewKinematic()
 {
-	cpBody *body = cpBodyNew(0.0f, 0.0f);
+	cpBody *body = cpBodyNew(0, 0);
 	cpBodySetType(body, CP_BODY_TYPE_KINEMATIC);
 	
 	return body;
@@ -83,7 +83,7 @@ cpBodyNewKinematic()
 cpBody*
 cpBodyNewStatic()
 {
-	cpBody *body = cpBodyNew(0.0f, 0.0f);
+	cpBody *body = cpBodyNew(0, 0);
 	cpBodySetType(body, CP_BODY_TYPE_STATIC);
 	
 	return body;
@@ -112,8 +112,8 @@ cpBodyFree(cpBody *body)
 	{
 		cpAssertHard(body->m == body->m && body->m_inv == body->m_inv, "Body's mass is NaN.");
 		cpAssertHard(body->i == body->i && body->i_inv == body->i_inv, "Body's moment is NaN.");
-		cpAssertHard(body->m >= 0.0f, "Body's mass is negative.");
-		cpAssertHard(body->i >= 0.0f, "Body's moment is negative.");
+		cpAssertHard(body->m >= 0, "Body's mass is negative.");
+		cpAssertHard(body->i >= 0, "Body's moment is negative.");
 		
 		cpv_assert_sane(body->p, "Body's position is invalid.");
 		cpv_assert_sane(body->v, "Body's velocity is invalid.");
@@ -153,19 +153,19 @@ cpBodySetType(cpBody *body, cpBodyType type)
 	
 	// Static bodies have their idle timers set to infinity.
 	// Non-static bodies should have their idle timer reset.
-	body->sleeping.idleTime = (type == CP_BODY_TYPE_STATIC ? INFINITY : 0.0f);
+	body->sleeping.idleTime = (type == CP_BODY_TYPE_STATIC ? INFINITY : 0);
 	
 	if(type == CP_BODY_TYPE_DYNAMIC){
-		body->m = body->i = 0.0f;
+		body->m = body->i = 0;
 		body->m_inv = body->i_inv = INFINITY;
 		
 		cpBodyAccumulateMassFromShapes(body);
 	} else {
 		body->m = body->i = INFINITY;
-		body->m_inv = body->i_inv = 0.0f;
+		body->m_inv = body->i_inv = 0;
 		
 		body->v = cpvzero;
-		body->w = 0.0f;
+		body->w = 0;
 	}
 	
 	// If the body is added to a space already, we'll need to update some space data structures.
@@ -209,7 +209,7 @@ cpBodyAccumulateMassFromShapes(cpBody *body)
 	if(body == NULL || cpBodyGetType(body) != CP_BODY_TYPE_DYNAMIC) return;
 	
 	// Reset the body's mass data.
-	body->m = body->i = 0.0f;
+	body->m = body->i = 0;
 	body->cog = cpvzero;
 	
 	// Cache the position to realign it at the end.
@@ -220,18 +220,18 @@ cpBodyAccumulateMassFromShapes(cpBody *body)
 		struct cpShapeMassInfo *info = &shape->massInfo;
 		cpFloat m = info->m;
 		
-		if(m > 0.0f){
+		if(m > 0){
 			cpFloat msum = body->m + m;
 			
-			body->i += m*info->i + cpvdistsq(body->cog, info->cog)*(m*body->m)/msum;
-			body->cog = cpvlerp(body->cog, info->cog, m/msum);
+			body->i += fix14_mul(m, info->i) + fix14_div(fix14_mul(cpvdistsq(body->cog, info->cog), (m*body->m)), msum);
+			body->cog = cpvlerp(body->cog, info->cog, fix14_div(m, msum));
 			body->m = msum;
 		}
 	}
 	
 	// Recalculate the inverses.
-	body->m_inv = 1.0f/body->m;
-	body->i_inv = 1.0f/body->i;
+	body->m_inv = fix14_inverse(body->m);
+	body->i_inv = fix14_inverse(body->i);
 	
 	// Realign the body since the CoG has probably moved.
 	cpBodySetPosition(body, pos);
@@ -254,11 +254,11 @@ void
 cpBodySetMass(cpBody *body, cpFloat mass)
 {
 	cpAssertHard(cpBodyGetType(body) == CP_BODY_TYPE_DYNAMIC, "You cannot set the mass of kinematic or static bodies.");
-	cpAssertHard(0.0f <= mass && mass < INFINITY, "Mass must be positive and finite.");
+	cpAssertHard(0 <= mass && mass < INFINITY, "Mass must be positive and finite.");
 	
 	cpBodyActivate(body);
 	body->m = mass;
-	body->m_inv = mass == 0.0f ? INFINITY : 1.0f/mass;
+	body->m_inv = mass == 0 ? INFINITY : fix14_inverse(mass);
 	cpAssertSaneBody(body);
 }
 
@@ -271,11 +271,11 @@ cpBodyGetMoment(const cpBody *body)
 void
 cpBodySetMoment(cpBody *body, cpFloat moment)
 {
-	cpAssertHard(moment >= 0.0f, "Moment of Inertia must be positive.");
+	cpAssertHard(moment >= 0, "Moment of Inertia must be positive.");
 	
 	cpBodyActivate(body);
 	body->i = moment;
-	body->i_inv = moment == 0.0f ? INFINITY : 1.0f/moment;
+	body->i_inv = moment == 0 ? INFINITY : fix14_inverse(moment);
 	cpAssertSaneBody(body);
 }
 
@@ -294,7 +294,7 @@ cpBodyAddShape(cpBody *body, cpShape *shape)
 	shape->next = next;
 	body->shapeList = shape;
 	
-	if(shape->massInfo.m > 0.0f){
+	if(shape->massInfo.m > 0){
 		cpBodyAccumulateMassFromShapes(body);
 	}
 }
@@ -318,7 +318,7 @@ cpBodyRemoveShape(cpBody *body, cpShape *shape)
   shape->prev = NULL;
   shape->next = NULL;
 	
-	if(cpBodyGetType(body) == CP_BODY_TYPE_DYNAMIC && shape->massInfo.m > 0.0f){
+	if(cpBodyGetType(body) == CP_BODY_TYPE_DYNAMIC && shape->massInfo.m > 0){
 		cpBodyAccumulateMassFromShapes(body);
 	}
 }
@@ -351,8 +351,8 @@ SetTransform(cpBody *body, cpVect p, cpFloat a)
 	cpVect c = body->cog;
 	
 	body->transform = cpTransformNewTranspose(
-		rot.x, -rot.y, p.x - (c.x*rot.x - c.y*rot.y),
-		rot.y,  rot.x, p.y - (c.x*rot.y + c.y*rot.x)
+		rot.x, -rot.y, p.x - (fix14_mul(c.x, rot.x) - fix14_mul(c.y, rot.y)),
+		rot.y,  rot.x, p.y - (fix14_mul(c.x, rot.y) + fix14_mul(c.y, rot.x))
 	);
 }
 
@@ -496,14 +496,14 @@ cpBodyUpdateVelocity(cpBody *body, cpVect gravity, cpFloat damping, cpFloat dt)
 	// Skip kinematic bodies.
 	if(cpBodyGetType(body) == CP_BODY_TYPE_KINEMATIC) return;
 	
-	cpAssertSoft(body->m > 0.0f && body->i > 0.0f, "Body's mass and moment must be positive to simulate. (Mass: %f Moment: %f)", body->m, body->i);
+	cpAssertSoft(body->m > 0 && body->i > 0, "Body's mass and moment must be positive to simulate. (Mass: %f Moment: %f)", body->m, body->i);
 	
 	body->v = cpvadd(cpvmult(body->v, damping), cpvmult(cpvadd(gravity, cpvmult(body->f, body->m_inv)), dt));
-	body->w = body->w*damping + body->t*body->i_inv*dt;
+	body->w = fix14_mul(body->w, damping) + fix14_mul(fix14_mul(body->t, body->i_inv), dt);
 	
 	// Reset forces.
 	body->f = cpvzero;
-	body->t = 0.0f;
+	body->t = 0;
 	
 	cpAssertSaneBody(body);
 }
@@ -512,11 +512,11 @@ void
 cpBodyUpdatePosition(cpBody *body, cpFloat dt)
 {
 	cpVect p = body->p = cpvadd(body->p, cpvmult(cpvadd(body->v, body->v_bias), dt));
-	cpFloat a = SetAngle(body, body->a + (body->w + body->w_bias)*dt);
+	cpFloat a = SetAngle(body, body->a + fix14_mul((body->w + body->w_bias), dt));
 	SetTransform(body, p, a);
 	
 	body->v_bias = cpvzero;
-	body->w_bias = 0.0f;
+	body->w_bias = 0;
 	
 	cpAssertSaneBody(body);
 }
@@ -583,8 +583,8 @@ cpBodyKineticEnergy(const cpBody *body)
 {
 	// Need to do some fudging to avoid NaNs
 	cpFloat vsq = cpvdot(body->v, body->v);
-	cpFloat wsq = body->w*body->w;
-	return (vsq ? vsq*body->m : 0.0f) + (wsq ? wsq*body->i : 0.0f);
+	cpFloat wsq = fix14_mul(body->w, body->w);
+	return (vsq ? fix14_mul(vsq, body->m) : 0) + (wsq ? fix14_mul(wsq, body->i) : 0);
 }
 
 void

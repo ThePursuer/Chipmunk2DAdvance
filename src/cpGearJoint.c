@@ -28,11 +28,11 @@ preStep(cpGearJoint *joint, cpFloat dt)
 	cpBody *b = joint->constraint.b;
 	
 	// calculate moment of inertia coefficient.
-	joint->iSum = 1.0f/(a->i_inv*joint->ratio_inv + joint->ratio*b->i_inv);
+	joint->iSum = fix14_inverse((fix14_mul(a->i_inv, joint->ratio_inv) + fix14_mul(joint->ratio, b->i_inv)));
 	
 	// calculate bias velocity
 	cpFloat maxBias = joint->constraint.maxBias;
-	joint->bias = cpfclamp(-bias_coef(joint->constraint.errorBias, dt)*(b->a*joint->ratio - a->a - joint->phase)/dt, -maxBias, maxBias);
+	joint->bias = cpfclamp(fix14_div(fix14_mul(-bias_coef(joint->constraint.errorBias, dt), (fix14_mul(b->a, joint->ratio) - a->a - joint->phase)), dt), -maxBias, maxBias);
 }
 
 static void
@@ -41,9 +41,9 @@ applyCachedImpulse(cpGearJoint *joint, cpFloat dt_coef)
 	cpBody *a = joint->constraint.a;
 	cpBody *b = joint->constraint.b;
 	
-	cpFloat j = joint->jAcc*dt_coef;
-	a->w -= j*a->i_inv*joint->ratio_inv;
-	b->w += j*b->i_inv;
+	cpFloat j = fix14_mul(joint->jAcc, dt_coef);
+	a->w -= fix14_mul(fix14_mul(j, a->i_inv), joint->ratio_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static void
@@ -53,19 +53,19 @@ applyImpulse(cpGearJoint *joint, cpFloat dt)
 	cpBody *b = joint->constraint.b;
 	
 	// compute relative rotational velocity
-	cpFloat wr = b->w*joint->ratio - a->w;
+	cpFloat wr = fix14_mul(b->w, joint->ratio) - a->w;
 	
-	cpFloat jMax = joint->constraint.maxForce*dt;
+	cpFloat jMax = fix14_mul(joint->constraint.maxForce, dt);
 	
 	// compute normal impulse	
-	cpFloat j = (joint->bias - wr)*joint->iSum;
+	cpFloat j = fix14_mul((joint->bias - wr), joint->iSum);
 	cpFloat jOld = joint->jAcc;
 	joint->jAcc = cpfclamp(jOld + j, -jMax, jMax);
 	j = joint->jAcc - jOld;
 	
 	// apply impulse
-	a->w -= j*a->i_inv*joint->ratio_inv;
-	b->w += j*b->i_inv;
+	a->w -= (fix14_mul(j, a->i_inv), joint->ratio_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static cpFloat
@@ -94,9 +94,9 @@ cpGearJointInit(cpGearJoint *joint, cpBody *a, cpBody *b, cpFloat phase, cpFloat
 	
 	joint->phase = phase;
 	joint->ratio = ratio;
-	joint->ratio_inv = 1.0f/ratio;
+	joint->ratio_inv = fix14_inverse(ratio);
 	
-	joint->jAcc = 0.0f;
+	joint->jAcc = 0;
 	
 	return joint;
 }
@@ -141,5 +141,5 @@ cpGearJointSetRatio(cpConstraint *constraint, cpFloat ratio)
 	cpAssertHard(cpConstraintIsGearJoint(constraint), "Constraint is not a ratchet joint.");
 	cpConstraintActivateBodies(constraint);
 	((cpGearJoint *)constraint)->ratio = ratio;
-	((cpGearJoint *)constraint)->ratio_inv = 1.0f/ratio;
+	((cpGearJoint *)constraint)->ratio_inv = fix14_inverse(ratio);
 }

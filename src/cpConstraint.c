@@ -21,6 +21,8 @@
 
 #include "chipmunk/chipmunk_private.h"
 
+#include "chipmunk/fix14.h"
+
 // TODO: Comment me!
 
 void cpConstraintDestroy(cpConstraint *constraint){}
@@ -47,7 +49,7 @@ cpConstraintInit(cpConstraint *constraint, const cpConstraintClass *klass, cpBod
 	constraint->next_b = NULL;
 	
 	constraint->maxForce = (cpFloat)INFINITY;
-	constraint->errorBias = cpfpow(1.0f - 0.1f, 60.0f);
+	constraint->errorBias = cpfpow(int_to_fix14(1) - fix14_inverse(int_to_fix14(10)), int_to_fix14(60));
 	constraint->maxBias = (cpFloat)INFINITY;
 	
 	constraint->collideBodies = cpTrue;
@@ -83,7 +85,7 @@ cpConstraintGetMaxForce(const cpConstraint *constraint)
 void
 cpConstraintSetMaxForce(cpConstraint *constraint, cpFloat maxForce)
 {
-	cpAssertHard(maxForce >= 0.0f, "maxForce must be positive.");
+	cpAssertHard(maxForce >= 0, "maxForce must be positive.");
 	cpConstraintActivateBodies(constraint);
 	constraint->maxForce = maxForce;
 }
@@ -97,7 +99,7 @@ cpConstraintGetErrorBias(const cpConstraint *constraint)
 void
 cpConstraintSetErrorBias(cpConstraint *constraint, cpFloat errorBias)
 {
-	cpAssertHard(errorBias >= 0.0f, "errorBias must be positive.");
+	cpAssertHard(errorBias >= 0, "errorBias must be positive.");
 	cpConstraintActivateBodies(constraint);
 	constraint->errorBias = errorBias;
 }
@@ -111,7 +113,7 @@ cpConstraintGetMaxBias(const cpConstraint *constraint)
 void
 cpConstraintSetMaxBias(cpConstraint *constraint, cpFloat maxBias)
 {
-	cpAssertHard(maxBias >= 0.0f, "maxBias must be positive.");
+	cpAssertHard(maxBias >= 0, "maxBias must be positive.");
 	cpConstraintActivateBodies(constraint);
 	constraint->maxBias = maxBias;
 }

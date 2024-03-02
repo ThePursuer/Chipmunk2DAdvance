@@ -185,7 +185,7 @@ static struct Edge
 SupportEdgeForSegment(const cpSegmentShape *seg, const cpVect n)
 {
 	cpHashValue hashid = seg->shape.hashid;
-	if(cpvdot(seg->tn, n) > 0.0){
+	if(cpvdot(seg->tn, n) > 0){
 		struct Edge edge = {{seg->ta, CP_HASH_PAIR(hashid, 0)}, {seg->tb, CP_HASH_PAIR(hashid, 1)}, seg->r, seg->tn};
 		return edge;
 	} else {
@@ -200,15 +200,15 @@ static inline cpFloat
 ClosestT(const cpVect a, const cpVect b)
 {
 	cpVect delta = cpvsub(b, a);
-	return -cpfclamp(cpvdot(delta, cpvadd(a, b))/(cpvlengthsq(delta) + CPFLOAT_MIN), -1.0f, 1.0f);
+	return -cpfclamp(fix14_div(cpvdot(delta, cpvadd(a, b)), (cpvlengthsq(delta) + INT32_MIN)), -int_to_fix14(1), int_to_fix14(1));
 }
 
 // Basically the same as cpvlerp(), except t = [-1, 1]
 static inline cpVect
 LerpT(const cpVect a, const cpVect b, const cpFloat t)
 {
-	cpFloat ht = 0.5f*t;
-	return cpvadd(cpvmult(a, 0.5f - ht), cpvmult(b, 0.5f + ht));
+	cpFloat ht = fix14_mul(8192, t);
+	return cpvadd(cpvmult(a, 8192 - ht), cpvmult(b, 8192 + ht));
 }
 
 // Closest points on the surface of two shapes.
@@ -243,14 +243,14 @@ ClosestPointsNew(const struct MinkowskiPoint v0, const struct MinkowskiPoint v1)
 	cpVect n = cpvnormalize(cpvrperp(delta));
 	cpFloat d = cpvdot(n, p);
 	
-	if(d <= 0.0f || (-1.0f < t && t < 1.0f)){
+	if(d <= 0 || (-int_to_fix14(1) < t && t < int_to_fix14(1))){
 		// If the shapes are overlapping, or we have a regular vertex/edge collision, we are done.
 		struct ClosestPoints points = {pa, pb, n, d, id};
 		return points;
 	} else {
 		// Vertex/vertex collisions need special treatment since the MSA won't be shared with an axis of the minkowski difference.
 		cpFloat d2 = cpvlength(p);
-		cpVect n2 = cpvmult(p, 1.0f/(d2 + CPFLOAT_MIN));
+		cpVect n2 = cpvmult(p, fix14_inverse((d2 + INT32_MIN)));
 		
 		struct ClosestPoints points = {pa, pb, n2, d2, id};
 		return points;
@@ -294,7 +294,7 @@ EPARecurse(const struct SupportContext *ctx, const int count, const struct Minko
 	cpVect verts[count];
 	for(int i=0; i<count; i++) verts[i] = hull[i].ab;
 	
-	ChipmunkDebugDrawPolygon(count, verts, 0.0, RGBAColor(1, 1, 0, 1), RGBAColor(1, 1, 0, 0.25));
+	ChipmunkDebugDrawPolygon(count, verts, 0, RGBAColor(1, 1, 0, 1), RGBAColor(1, 1, 0, 4096));
 	ChipmunkDebugDrawSegment(v0.ab, v1.ab, RGBAColor(1, 0, 0, 1));
 	
 	ChipmunkDebugDrawDot(5, p.ab, LAColor(1, 1));
@@ -358,15 +358,15 @@ GJKRecurse(const struct SupportContext *ctx, const struct MinkowskiPoint v0, con
 		return GJKRecurse(ctx, v1, v0, iteration);
 	} else {
 		cpFloat t = ClosestT(v0.ab, v1.ab);
-		cpVect n = (-1.0f < t && t < 1.0f ? cpvperp(cpvsub(v1.ab, v0.ab)) : cpvneg(LerpT(v0.ab, v1.ab, t)));
+		cpVect n = (-int_to_fix14(1) < t && t < int_to_fix14(1) ? cpvperp(cpvsub(v1.ab, v0.ab)) : cpvneg(LerpT(v0.ab, v1.ab, t)));
 		struct MinkowskiPoint p = Support(ctx, n);
 		
 #if DRAW_GJK
 		ChipmunkDebugDrawSegment(v0.ab, v1.ab, RGBAColor(1, 1, 1, 1));
 		cpVect c = cpvlerp(v0.ab, v1.ab, 0.5);
-		ChipmunkDebugDrawSegment(c, cpvadd(c, cpvmult(cpvnormalize(n), 5.0)), RGBAColor(1, 0, 0, 1));
+		ChipmunkDebugDrawSegment(c, cpvadd(c, cpvmult(cpvnormalize(n), int_to_fix14(5))), RGBAColor(1, 0, 0, 1));
 		
-		ChipmunkDebugDrawDot(5.0, p.ab, LAColor(1, 1));
+		ChipmunkDebugDrawDot(int_to_fix14(5), p.ab, LAColor(1, 1));
 #endif
 		
 		if(cpCheckPointGreater(p.ab, v0.ab, cpvzero) && cpCheckPointGreater(v1.ab, p.ab, cpvzero)){
@@ -435,7 +435,7 @@ GJK(const struct SupportContext *ctx, cpCollisionID *id)
 	
 	// draw the minkowski difference origin
 	cpVect origin = cpvzero;
-	ChipmunkDebugDrawDot(5.0, origin, RGBAColor(1,0,0,1));
+	ChipmunkDebugDrawDot(int_to_fix14(5), origin, RGBAColor(1,0,0,1));
 	
 	int mdiffCount = count1*count2;
 	cpVect *mdiffVerts = alloca(mdiffCount*sizeof(cpVect));
@@ -449,9 +449,9 @@ GJK(const struct SupportContext *ctx, cpCollisionID *id)
 	}
 	 
 	cpVect *hullVerts = alloca(mdiffCount*sizeof(cpVect));
-	int hullCount = cpConvexHull(mdiffCount, mdiffVerts, hullVerts, NULL, 0.0);
+	int hullCount = cpConvexHull(mdiffCount, mdiffVerts, hullVerts, NULL, 0);
 	
-	ChipmunkDebugDrawPolygon(hullCount, hullVerts, 0.0, RGBAColor(1, 0, 0, 1), RGBAColor(1, 0, 0, 0.25));
+	ChipmunkDebugDrawPolygon(hullCount, hullVerts, 0, RGBAColor(1, 0, 0, 1), RGBAColor(1, 0, 0, 4096));
 #endif
 	
 	struct MinkowskiPoint v0, v1;
@@ -492,24 +492,24 @@ ContactPoints(const struct Edge e1, const struct Edge e2, const struct ClosestPo
 		cpFloat d_e2_b = cpvcross(e2.b.p, n);
 		
 		// TODO + min isn't a complete fix.
-		cpFloat e1_denom = 1.0f/(d_e1_b - d_e1_a + CPFLOAT_MIN);
-		cpFloat e2_denom = 1.0f/(d_e2_b - d_e2_a + CPFLOAT_MIN);
+		cpFloat e1_denom = fix14_inverse((d_e1_b - d_e1_a + INT32_MIN));
+		cpFloat e2_denom = fix14_inverse((d_e2_b - d_e2_a + INT32_MIN));
 		
 		// Project the endpoints of the two edges onto the opposing edge, clamping them as necessary.
 		// Compare the projected points to the collision normal to see if the shapes overlap there.
 		{
-			cpVect p1 = cpvadd(cpvmult(n,  e1.r), cpvlerp(e1.a.p, e1.b.p, cpfclamp01((d_e2_b - d_e1_a)*e1_denom)));
-			cpVect p2 = cpvadd(cpvmult(n, -e2.r), cpvlerp(e2.a.p, e2.b.p, cpfclamp01((d_e1_a - d_e2_a)*e2_denom)));
+			cpVect p1 = cpvadd(cpvmult(n,  e1.r), cpvlerp(e1.a.p, e1.b.p, cpfclamp01(fix14_mul((d_e2_b - d_e1_a), e1_denom))));
+			cpVect p2 = cpvadd(cpvmult(n, -e2.r), cpvlerp(e2.a.p, e2.b.p, cpfclamp01(fix14_mul((d_e1_a - d_e2_a), e2_denom))));
 			cpFloat dist = cpvdot(cpvsub(p2, p1), n);
-			if(dist <= 0.0f){
+			if(dist <= 0){
 				cpHashValue hash_1a2b = CP_HASH_PAIR(e1.a.hash, e2.b.hash);
 				cpCollisionInfoPushContact(info, p1, p2, hash_1a2b);
 			}
 		}{
-			cpVect p1 = cpvadd(cpvmult(n,  e1.r), cpvlerp(e1.a.p, e1.b.p, cpfclamp01((d_e2_a - d_e1_a)*e1_denom)));
-			cpVect p2 = cpvadd(cpvmult(n, -e2.r), cpvlerp(e2.a.p, e2.b.p, cpfclamp01((d_e1_b - d_e2_a)*e2_denom)));
+			cpVect p1 = cpvadd(cpvmult(n,  e1.r), cpvlerp(e1.a.p, e1.b.p, cpfclamp01(fix14_mul((d_e2_a - d_e1_a), e1_denom))));
+			cpVect p2 = cpvadd(cpvmult(n, -e2.r), cpvlerp(e2.a.p, e2.b.p, cpfclamp01(fix14_mul((d_e1_b - d_e2_a), e2_denom))));
 			cpFloat dist = cpvdot(cpvsub(p2, p1), n);
-			if(dist <= 0.0f){
+			if(dist <= 0){
 				cpHashValue hash_1b2a = CP_HASH_PAIR(e1.b.hash, e2.a.hash);
 				cpCollisionInfoPushContact(info, p1, p2, hash_1b2a);
 			}
@@ -529,9 +529,9 @@ CircleToCircle(const cpCircleShape *c1, const cpCircleShape *c2, struct cpCollis
 	cpVect delta = cpvsub(c2->tc, c1->tc);
 	cpFloat distsq = cpvlengthsq(delta);
 	
-	if(distsq < mindist*mindist){
+	if(distsq < fix14_mul(mindist, mindist)){
 		cpFloat dist = cpfsqrt(distsq);
-		cpVect n = info->n = (dist ? cpvmult(delta, 1.0f/dist) : cpv(1.0f, 0.0f));
+		cpVect n = info->n = (dist ? cpvmult(delta, fix14_inverse(dist)) : cpv(int_to_fix14(1), 0));
 		cpCollisionInfoPushContact(info, cpvadd(c1->tc, cpvmult(n, c1->r)), cpvadd(c2->tc, cpvmult(n, -c2->r)), 0);
 	}
 }
@@ -545,23 +545,23 @@ CircleToSegment(const cpCircleShape *circle, const cpSegmentShape *segment, stru
 	
 	// Find the closest point on the segment to the circle.
 	cpVect seg_delta = cpvsub(seg_b, seg_a);
-	cpFloat closest_t = cpfclamp01(cpvdot(seg_delta, cpvsub(center, seg_a))/cpvlengthsq(seg_delta));
+	cpFloat closest_t = cpfclamp01(fix14_div(cpvdot(seg_delta, cpvsub(center, seg_a)), cpvlengthsq(seg_delta)));
 	cpVect closest = cpvadd(seg_a, cpvmult(seg_delta, closest_t));
 	
 	// Compare the radii of the two shapes to see if they are colliding.
 	cpFloat mindist = circle->r + segment->r;
 	cpVect delta = cpvsub(closest, center);
 	cpFloat distsq = cpvlengthsq(delta);
-	if(distsq < mindist*mindist){
+	if(distsq < fix14_mul(mindist, mindist)){
 		cpFloat dist = cpfsqrt(distsq);
 		// Handle coincident shapes as gracefully as possible.
-		cpVect n = info->n = (dist ? cpvmult(delta, 1.0f/dist) : segment->tn);
+		cpVect n = info->n = (dist ? cpvmult(delta, fix14_inverse(dist)) : segment->tn);
 		
 		// Reject endcap collisions if tangents are provided.
 		cpVect rot = cpBodyGetRotation(segment->shape.body);
 		if(
-			(closest_t != 0.0f || cpvdot(n, cpvrotate(segment->a_tangent, rot)) >= 0.0) &&
-			(closest_t != 1.0f || cpvdot(n, cpvrotate(segment->b_tangent, rot)) >= 0.0)
+			(closest_t != 0 || cpvdot(n, cpvrotate(segment->a_tangent, rot)) >= 0) &&
+			(closest_t != int_to_fix14(1) || cpvdot(n, cpvrotate(segment->b_tangent, rot)) >= 0)
 		){
 			cpCollisionInfoPushContact(info, cpvadd(center, cpvmult(n, circle->r)), cpvadd(closest, cpvmult(n, -segment->r)), 0);
 		}
@@ -582,7 +582,7 @@ SegmentToSegment(const cpSegmentShape *seg1, const cpSegmentShape *seg2, struct 
 	ChipmunkDebugDrawDot(6.0, points.a, RGBAColor(1, 1, 1, 1));
 	ChipmunkDebugDrawDot(6.0, points.b, RGBAColor(1, 1, 1, 1));
 	ChipmunkDebugDrawSegment(points.a, points.b, RGBAColor(1, 1, 1, 1));
-	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, 10.0)), RGBAColor(1, 0, 0, 1));
+	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, int_to_fix14(10))), RGBAColor(1, 0, 0, 1));
 #endif
 	
 	cpVect n = points.n;
@@ -593,10 +593,10 @@ SegmentToSegment(const cpSegmentShape *seg1, const cpSegmentShape *seg2, struct 
 	if(
 		points.d <= (seg1->r + seg2->r) && (
 			// Reject endcap collisions if tangents are provided.
-			(!cpveql(points.a, seg1->ta) || cpvdot(n, cpvrotate(seg1->a_tangent, rot1)) <= 0.0) &&
-			(!cpveql(points.a, seg1->tb) || cpvdot(n, cpvrotate(seg1->b_tangent, rot1)) <= 0.0) &&
-			(!cpveql(points.b, seg2->ta) || cpvdot(n, cpvrotate(seg2->a_tangent, rot2)) >= 0.0) &&
-			(!cpveql(points.b, seg2->tb) || cpvdot(n, cpvrotate(seg2->b_tangent, rot2)) >= 0.0)
+			(!cpveql(points.a, seg1->ta) || cpvdot(n, cpvrotate(seg1->a_tangent, rot1)) <= 0) &&
+			(!cpveql(points.a, seg1->tb) || cpvdot(n, cpvrotate(seg1->b_tangent, rot1)) <= 0) &&
+			(!cpveql(points.b, seg2->ta) || cpvdot(n, cpvrotate(seg2->a_tangent, rot2)) >= 0) &&
+			(!cpveql(points.b, seg2->tb) || cpvdot(n, cpvrotate(seg2->b_tangent, rot2)) >= 0)
 		)
 	){
 		ContactPoints(SupportEdgeForSegment(seg1, n), SupportEdgeForSegment(seg2, cpvneg(n)), points, info);
@@ -614,14 +614,14 @@ PolyToPoly(const cpPolyShape *poly1, const cpPolyShape *poly2, struct cpCollisio
 //	ChipmunkDemoPrintString("Distance: %.2f\n", points.d);
 #endif
 	
-	ChipmunkDebugDrawDot(3.0, points.a, RGBAColor(1, 1, 1, 1));
-	ChipmunkDebugDrawDot(3.0, points.b, RGBAColor(1, 1, 1, 1));
+	ChipmunkDebugDrawDot(int_to_fix14(3), points.a, RGBAColor(1, 1, 1, 1));
+	ChipmunkDebugDrawDot(int_to_fix14(3), points.b, RGBAColor(1, 1, 1, 1));
 	ChipmunkDebugDrawSegment(points.a, points.b, RGBAColor(1, 1, 1, 1));
-	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, 10.0)), RGBAColor(1, 0, 0, 1));
+	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, int_to_fix14(10))), RGBAColor(1, 0, 0, 1));
 #endif
 	
 	// If the closest points are nearer than the sum of the radii...
-	if(points.d - poly1->r - poly2->r <= 0.0){
+	if(points.d - poly1->r - poly2->r <= 0){
 		ContactPoints(SupportEdgeForPoly(poly1, points.n), SupportEdgeForPoly(poly2, cpvneg(points.n)), points, info);
 	}
 }
@@ -637,10 +637,10 @@ SegmentToPoly(const cpSegmentShape *seg, const cpPolyShape *poly, struct cpColli
 //	ChipmunkDemoPrintString("Distance: %.2f\n", points.d);
 #endif
 	
-	ChipmunkDebugDrawDot(3.0, points.a, RGBAColor(1, 1, 1, 1));
-	ChipmunkDebugDrawDot(3.0, points.b, RGBAColor(1, 1, 1, 1));
+	ChipmunkDebugDrawDot(int_to_fix14(3), points.a, RGBAColor(1, 1, 1, 1));
+	ChipmunkDebugDrawDot(int_to_fix14(3), points.b, RGBAColor(1, 1, 1, 1));
 	ChipmunkDebugDrawSegment(points.a, points.b, RGBAColor(1, 1, 1, 1));
-	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, 10.0)), RGBAColor(1, 0, 0, 1));
+	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, int_to_fix14(10))), RGBAColor(1, 0, 0, 1));
 #endif
 	
 	cpVect n = points.n;
@@ -648,10 +648,10 @@ SegmentToPoly(const cpSegmentShape *seg, const cpPolyShape *poly, struct cpColli
 	
 	if(
 		// If the closest points are nearer than the sum of the radii...
-		points.d - seg->r - poly->r <= 0.0 && (
+		points.d - seg->r - poly->r <= 0 && (
 			// Reject endcap collisions if tangents are provided.
-			(!cpveql(points.a, seg->ta) || cpvdot(n, cpvrotate(seg->a_tangent, rot)) <= 0.0) &&
-			(!cpveql(points.a, seg->tb) || cpvdot(n, cpvrotate(seg->b_tangent, rot)) <= 0.0)
+			(!cpveql(points.a, seg->ta) || cpvdot(n, cpvrotate(seg->a_tangent, rot)) <= 0) &&
+			(!cpveql(points.a, seg->tb) || cpvdot(n, cpvrotate(seg->b_tangent, rot)) <= 0)
 		)
 	){
 		ContactPoints(SupportEdgeForSegment(seg, n), SupportEdgeForPoly(poly, cpvneg(n)), points, info);
@@ -665,10 +665,10 @@ CircleToPoly(const cpCircleShape *circle, const cpPolyShape *poly, struct cpColl
 	struct ClosestPoints points = GJK(&context, &info->id);
 	
 #if DRAW_CLOSEST
-	ChipmunkDebugDrawDot(3.0, points.a, RGBAColor(1, 1, 1, 1));
-	ChipmunkDebugDrawDot(3.0, points.b, RGBAColor(1, 1, 1, 1));
+	ChipmunkDebugDrawDot(int_to_fix14(3), points.a, RGBAColor(1, 1, 1, 1));
+	ChipmunkDebugDrawDot(int_to_fix14(3), points.b, RGBAColor(1, 1, 1, 1));
 	ChipmunkDebugDrawSegment(points.a, points.b, RGBAColor(1, 1, 1, 1));
-	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, 10.0)), RGBAColor(1, 0, 0, 1));
+	ChipmunkDebugDrawSegment(points.a, cpvadd(points.a, cpvmult(points.n, int_to_fix14(10))), RGBAColor(1, 0, 0, 1));
 #endif
 	
 	// If the closest points are nearer than the sum of the radii...
@@ -715,7 +715,7 @@ cpCollide(const cpShape *a, const cpShape *b, cpCollisionID id, struct cpContact
 //		for(int i=0; i<info.count; i++){
 //			cpVect r1 = info.arr[i].r1;
 //			cpVect r2 = info.arr[i].r2;
-//			cpVect mid = cpvlerp(r1, r2, 0.5f);
+//			cpVect mid = cpvlerp(r1, r2, 8192);
 //			
 //			ChipmunkDebugDrawSegment(r1, mid, RGBAColor(1, 0, 0, 1));
 //			ChipmunkDebugDrawSegment(r2, mid, RGBAColor(0, 0, 1, 1));

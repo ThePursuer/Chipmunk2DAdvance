@@ -28,7 +28,7 @@ preStep(cpSimpleMotor *joint, cpFloat dt)
 	cpBody *b = joint->constraint.b;
 	
 	// calculate moment of inertia coefficient.
-	joint->iSum = 1.0f/(a->i_inv + b->i_inv);
+	joint->iSum = fix14_inverse(a->i_inv + b->i_inv);
 }
 
 static void
@@ -37,9 +37,9 @@ applyCachedImpulse(cpSimpleMotor *joint, cpFloat dt_coef)
 	cpBody *a = joint->constraint.a;
 	cpBody *b = joint->constraint.b;
 	
-	cpFloat j = joint->jAcc*dt_coef;
-	a->w -= j*a->i_inv;
-	b->w += j*b->i_inv;
+	cpFloat j = fix14_mul(joint->jAcc, dt_coef);
+	a->w -= fix14_mul(j, a->i_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static void
@@ -51,17 +51,17 @@ applyImpulse(cpSimpleMotor *joint, cpFloat dt)
 	// compute relative rotational velocity
 	cpFloat wr = b->w - a->w + joint->rate;
 	
-	cpFloat jMax = joint->constraint.maxForce*dt;
+	cpFloat jMax = fix14_mul(joint->constraint.maxForce, dt);
 	
 	// compute normal impulse	
-	cpFloat j = -wr*joint->iSum;
+	cpFloat j = fix14_mul(-wr, joint->iSum);
 	cpFloat jOld = joint->jAcc;
 	joint->jAcc = cpfclamp(jOld + j, -jMax, jMax);
 	j = joint->jAcc - jOld;
 	
 	// apply impulse
-	a->w -= j*a->i_inv;
-	b->w += j*b->i_inv;
+	a->w -= fix14_mul(j, a->i_inv);
+	b->w += fix14_mul(j, b->i_inv);
 }
 
 static cpFloat
@@ -90,7 +90,7 @@ cpSimpleMotorInit(cpSimpleMotor *joint, cpBody *a, cpBody *b, cpFloat rate)
 	
 	joint->rate = rate;
 	
-	joint->jAcc = 0.0f;
+	joint->jAcc = 0;
 	
 	return joint;
 }

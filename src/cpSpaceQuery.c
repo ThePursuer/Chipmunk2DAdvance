@@ -49,7 +49,7 @@ void
 cpSpacePointQuery(cpSpace *space, cpVect point, cpFloat maxDistance, cpShapeFilter filter, cpSpacePointQueryFunc func, void *data)
 {
 	struct PointQueryContext context = {point, maxDistance, filter, func};
-	cpBB bb = cpBBNewForCircle(point, cpfmax(maxDistance, 0.0f));
+	cpBB bb = cpBBNewForCircle(point, cpfmax(maxDistance, 0));
 	
 	cpSpaceLock(space); {
 		cpSpatialIndexQuery(space->dynamicShapes, &context, bb, (cpSpatialIndexQueryFunc)NearestPointQuery, data);
@@ -88,7 +88,7 @@ cpSpacePointQueryNearest(cpSpace *space, cpVect point, cpFloat maxDistance, cpSh
 		NULL
 	};
 	
-	cpBB bb = cpBBNewForCircle(point, cpfmax(maxDistance, 0.0f));
+	cpBB bb = cpBBNewForCircle(point, cpfmax(maxDistance, 0));
 	cpSpatialIndexQuery(space->dynamicShapes, &context, bb, (cpSpatialIndexQueryFunc)NearestPointQueryNearest, out);
 	cpSpatialIndexQuery(space->staticShapes, &context, bb, (cpSpatialIndexQueryFunc)NearestPointQueryNearest, out);
 	
@@ -117,7 +117,7 @@ SegmentQuery(struct SegmentQueryContext *context, cpShape *shape, void *data)
 		context->func(shape, info.point, info.normal, info.alpha, data);
 	}
 	
-	return 1.0f;
+	return int_to_fix14(1);
 }
 
 void
@@ -131,8 +131,8 @@ cpSpaceSegmentQuery(cpSpace *space, cpVect start, cpVect end, cpFloat radius, cp
 	};
 	
 	cpSpaceLock(space); {
-    cpSpatialIndexSegmentQuery(space->staticShapes, &context, start, end, 1.0f, (cpSpatialIndexSegmentQueryFunc)SegmentQuery, data);
-    cpSpatialIndexSegmentQuery(space->dynamicShapes, &context, start, end, 1.0f, (cpSpatialIndexSegmentQueryFunc)SegmentQuery, data);
+    cpSpatialIndexSegmentQuery(space->staticShapes, &context, start, end, int_to_fix14(1), (cpSpatialIndexSegmentQueryFunc)SegmentQuery, data);
+    cpSpatialIndexSegmentQuery(space->dynamicShapes, &context, start, end, int_to_fix14(1), (cpSpatialIndexSegmentQueryFunc)SegmentQuery, data);
 	} cpSpaceUnlock(space, cpTrue);
 }
 
@@ -155,7 +155,7 @@ SegmentQueryFirst(struct SegmentQueryContext *context, cpShape *shape, cpSegment
 cpShape *
 cpSpaceSegmentQueryFirst(cpSpace *space, cpVect start, cpVect end, cpFloat radius, cpShapeFilter filter, cpSegmentQueryInfo *out)
 {
-	cpSegmentQueryInfo info = {NULL, end, cpvzero, 1.0f};
+	cpSegmentQueryInfo info = {NULL, end, cpvzero, int_to_fix14(1)};
 	if(out){
 		(*out) = info;
   } else {
@@ -169,7 +169,7 @@ cpSpaceSegmentQueryFirst(cpSpace *space, cpVect start, cpVect end, cpFloat radiu
 		NULL
 	};
 	
-	cpSpatialIndexSegmentQuery(space->staticShapes, &context, start, end, 1.0f, (cpSpatialIndexSegmentQueryFunc)SegmentQueryFirst, out);
+	cpSpatialIndexSegmentQuery(space->staticShapes, &context, start, end, int_to_fix14(1), (cpSpatialIndexSegmentQueryFunc)SegmentQueryFirst, out);
 	cpSpatialIndexSegmentQuery(space->dynamicShapes, &context, start, end, out->alpha, (cpSpatialIndexSegmentQueryFunc)SegmentQueryFirst, out);
 	
 	return (cpShape *)out->shape;

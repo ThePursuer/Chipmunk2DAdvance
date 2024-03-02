@@ -37,18 +37,18 @@ preStep(cpDampedSpring *spring, cpFloat dt)
 	
 	cpVect delta = cpvsub(cpvadd(b->p, spring->r2), cpvadd(a->p, spring->r1));
 	cpFloat dist = cpvlength(delta);
-	spring->n = cpvmult(delta, 1.0f/(dist ? dist : INFINITY));
+	spring->n = cpvmult(delta, fix14_inverse((dist ? dist : INFINITY)));
 	
 	cpFloat k = k_scalar(a, b, spring->r1, spring->r2, spring->n);
-	cpAssertSoft(k != 0.0, "Unsolvable spring.");
-	spring->nMass = 1.0f/k;
+	cpAssertSoft(k != 0, "Unsolvable spring.");
+	spring->nMass = fix14_inverse(k);
 	
-	spring->target_vrn = 0.0f;
-	spring->v_coef = 1.0f - cpfexp(-spring->damping*dt*k);
+	spring->target_vrn = 0;
+	spring->v_coef = int_to_fix14(1) - cpfexp(fix14_mul(fix14_mul(-spring->damping, dt), k));
 
 	// apply spring force
 	cpFloat f_spring = spring->springForceFunc((cpConstraint *)spring, dist);
-	cpFloat j_spring = spring->jAcc = f_spring*dt;
+	cpFloat j_spring = spring->jAcc = fix14_mul(f_spring, dt);
 	apply_impulses(a, b, spring->r1, spring->r2, cpvmult(spring->n, j_spring));
 }
 
@@ -68,10 +68,10 @@ applyImpulse(cpDampedSpring *spring, cpFloat dt)
 	cpFloat vrn = normal_relative_velocity(a, b, r1, r2, n);
 	
 	// compute velocity loss from drag
-	cpFloat v_damp = (spring->target_vrn - vrn)*spring->v_coef;
+	cpFloat v_damp = fix14_mul((spring->target_vrn - vrn), spring->v_coef);
 	spring->target_vrn = vrn + v_damp;
 	
-	cpFloat j_damp = v_damp*spring->nMass;
+	cpFloat j_damp = fix14_mul(v_damp, spring->nMass);
 	spring->jAcc += j_damp;
 	apply_impulses(a, b, spring->r1, spring->r2, cpvmult(spring->n, j_damp));
 }
@@ -108,7 +108,7 @@ cpDampedSpringInit(cpDampedSpring *spring, cpBody *a, cpBody *b, cpVect anchorA,
 	spring->damping = damping;
 	spring->springForceFunc = (cpDampedSpringForceFunc)defaultSpringForce;
 	
-	spring->jAcc = 0.0f;
+	spring->jAcc = 0;
 	
 	return spring;
 }

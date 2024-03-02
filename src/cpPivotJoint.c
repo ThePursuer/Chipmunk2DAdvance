@@ -35,7 +35,7 @@ preStep(cpPivotJoint *joint, cpFloat dt)
 	
 	// calculate bias velocity
 	cpVect delta = cpvsub(cpvadd(b->p, joint->r2), cpvadd(a->p, joint->r1));
-	joint->bias = cpvclamp(cpvmult(delta, -bias_coef(joint->constraint.errorBias, dt)/dt), joint->constraint.maxBias);
+	joint->bias = cpvclamp(cpvmult(delta, fix14_div(-bias_coef(joint->constraint.errorBias, dt), dt)), joint->constraint.maxBias);
 }
 
 static void
@@ -62,7 +62,7 @@ applyImpulse(cpPivotJoint *joint, cpFloat dt)
 	// compute normal impulse
 	cpVect j = cpMat2x2Transform(joint->k, cpvsub(joint->bias, vr));
 	cpVect jOld = joint->jAcc;
-	joint->jAcc = cpvclamp(cpvadd(joint->jAcc, j), joint->constraint.maxForce*dt);
+	joint->jAcc = cpvclamp(cpvadd(joint->jAcc, j), fix14_div(joint->constraint.maxForce, dt));
 	j = cpvsub(joint->jAcc, jOld);
 	
 	// apply impulse

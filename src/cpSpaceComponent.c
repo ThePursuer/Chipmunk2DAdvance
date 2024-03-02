@@ -120,7 +120,7 @@ void
 cpBodyActivate(cpBody *body)
 {
 	if(body != NULL && cpBodyGetType(body) == CP_BODY_TYPE_DYNAMIC){
-		body->sleeping.idleTime = 0.0f;
+		body->sleeping.idleTime = 0;
 		
 		cpBody *root = ComponentRoot(body);
 		if(root && cpBodyIsSleeping(root)){
@@ -132,7 +132,7 @@ cpBodyActivate(cpBody *body)
 			while(body){
 				cpBody *next = body->sleeping.next;
 				
-				body->sleeping.idleTime = 0.0f;
+				body->sleeping.idleTime = 0;
 				body->sleeping.root = NULL;
 				body->sleeping.next = NULL;
 				cpSpaceActivateBody(space, body);
@@ -147,7 +147,7 @@ cpBodyActivate(cpBody *body)
 			// Reset the idle timer of things the body is touching as well.
 			// That way things don't get left hanging in the air.
 			cpBody *other = (arb->body_a == body ? arb->body_b : arb->body_a);
-			if(cpBodyGetType(other) != CP_BODY_TYPE_STATIC) other->sleeping.idleTime = 0.0f;
+			if(cpBodyGetType(other) != CP_BODY_TYPE_STATIC) other->sleeping.idleTime = 0;
 		}
 	}
 }
@@ -235,7 +235,7 @@ cpSpaceProcessComponents(cpSpace *space, cpFloat dt)
 	// Calculate the kinetic energy of all the bodies.
 	if(sleep){
 		cpFloat dv = space->idleSpeedThreshold;
-		cpFloat dvsq = (dv ? dv*dv : cpvlengthsq(space->gravity)*dt*dt);
+		cpFloat dvsq = (dv ? fix14_mul(dv, dv) : fix14_mul(fix14_mul(cpvlengthsq(space->gravity), dt), dt));
 		
 		// update idling and reset component nodes
 		for(int i=0; i<bodies->num; i++){
@@ -245,8 +245,8 @@ cpSpaceProcessComponents(cpSpace *space, cpFloat dt)
 			if(cpBodyGetType(body) != CP_BODY_TYPE_DYNAMIC) continue;
 			
 			// Need to deal with infinite mass objects
-			cpFloat keThreshold = (dvsq ? body->m*dvsq : 0.0f);
-			body->sleeping.idleTime = (cpBodyKineticEnergy(body) > keThreshold ? 0.0f : body->sleeping.idleTime + dt);
+			cpFloat keThreshold = (dvsq ? fix14_mul(body->m, dvsq) : 0);
+			body->sleeping.idleTime = (cpBodyKineticEnergy(body) > keThreshold ? 0 : body->sleeping.idleTime + dt);
 		}
 	}
 	
@@ -334,13 +334,13 @@ cpBodySleepWithGroup(cpBody *body, cpBody *group){
 		
 		body->sleeping.root = root;
 		body->sleeping.next = root->sleeping.next;
-		body->sleeping.idleTime = 0.0f;
+		body->sleeping.idleTime = 0;
 		
 		root->sleeping.next = body;
 	} else {
 		body->sleeping.root = body;
 		body->sleeping.next = NULL;
-		body->sleeping.idleTime = 0.0f;
+		body->sleeping.idleTime = 0;
 		
 		cpArrayPush(space->sleepingComponents, body);
 	}

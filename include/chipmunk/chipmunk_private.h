@@ -124,13 +124,13 @@ CircleSegmentQuery(cpShape *shape, cpVect center, cpFloat r1, cpVect a, cpVect b
 	cpVect db = cpvsub(b, center);
 	cpFloat rsum = r1 + r2;
 	
-	cpFloat qa = cpvdot(da, da) - 2.0f*cpvdot(da, db) + cpvdot(db, db);
+	cpFloat qa = cpvdot(da, da) - (cpvdot(da, db) << 1) + cpvdot(db, db);
 	cpFloat qb = cpvdot(da, db) - cpvdot(da, da);
-	cpFloat det = qb*qb - qa*(cpvdot(da, da) - rsum*rsum);
+	cpFloat det = fix14_mul(qb, qb) - fix14_mul(qa, (cpvdot(da, da) - fix14_mul(rsum, rsum)));
 	
-	if(det >= 0.0f){
-		cpFloat t = (-qb - cpfsqrt(det))/(qa);
-		if(0.0f<= t && t <= 1.0f){
+	if(det >= 0){
+		cpFloat t = fix14_div((-qb - cpfsqrt(det)), (qa));
+		if(0 <= t && t <= int_to_fix14(1)){
 			cpVect n = cpvnormalize(cpvlerp(da, db, t));
 			
 			info->shape = shape;
@@ -185,7 +185,7 @@ normal_relative_velocity(cpBody *a, cpBody *b, cpVect r1, cpVect r2, cpVect n){
 static inline void
 apply_impulse(cpBody *body, cpVect j, cpVect r){
 	body->v = cpvadd(body->v, cpvmult(j, body->m_inv));
-	body->w += body->i_inv*cpvcross(r, j);
+	body->w += fix14_mul(body->i_inv, cpvcross(r, j));
 }
 
 static inline void
@@ -199,7 +199,7 @@ static inline void
 apply_bias_impulse(cpBody *body, cpVect j, cpVect r)
 {
 	body->v_bias = cpvadd(body->v_bias, cpvmult(j, body->m_inv));
-	body->w_bias += body->i_inv*cpvcross(r, j);
+	body->w_bias += fix14_mul(body->i_inv, cpvcross(r, j));
 }
 
 static inline void
@@ -213,7 +213,7 @@ static inline cpFloat
 k_scalar_body(cpBody *body, cpVect r, cpVect n)
 {
 	cpFloat rcn = cpvcross(r, n);
-	return body->m_inv + body->i_inv*rcn*rcn;
+	return body->m_inv + fix14_mul(fix14_mul(body->i_inv, rcn), rcn);
 }
 
 static inline cpFloat
@@ -231,40 +231,40 @@ k_tensor(cpBody *a, cpBody *b, cpVect r1, cpVect r2)
 	cpFloat m_sum = a->m_inv + b->m_inv;
 	
 	// start with Identity*m_sum
-	cpFloat k11 = m_sum, k12 = 0.0f;
-	cpFloat k21 = 0.0f,  k22 = m_sum;
+	cpFloat k11 = m_sum, k12 = 0;
+	cpFloat k21 = 0,  k22 = m_sum;
 	
 	// add the influence from r1
 	cpFloat a_i_inv = a->i_inv;
-	cpFloat r1xsq =  r1.x * r1.x * a_i_inv;
-	cpFloat r1ysq =  r1.y * r1.y * a_i_inv;
-	cpFloat r1nxy = -r1.x * r1.y * a_i_inv;
+	cpFloat r1xsq =  fix14_mul(fix14_mul(r1.x, r1.x), a_i_inv);
+	cpFloat r1ysq =  fix14_mul(fix14_mul(r1.y, r1.y), a_i_inv);
+	cpFloat r1nxy = -fix14_mul(fix14_mul(r1.x, r1.y), a_i_inv);
 	k11 += r1ysq; k12 += r1nxy;
 	k21 += r1nxy; k22 += r1xsq;
 	
 	// add the influnce from r2
 	cpFloat b_i_inv = b->i_inv;
-	cpFloat r2xsq =  r2.x * r2.x * b_i_inv;
-	cpFloat r2ysq =  r2.y * r2.y * b_i_inv;
-	cpFloat r2nxy = -r2.x * r2.y * b_i_inv;
+	cpFloat r2xsq =  fix14_mul(fix14_mul(r2.x, r2.x), b_i_inv);
+	cpFloat r2ysq =  fix14_mul(fix14_mul(r2.y, r2.y), b_i_inv);
+	cpFloat r2nxy = -fix14_mul(fix14_mul(r2.x, r2.y), b_i_inv);
 	k11 += r2ysq; k12 += r2nxy;
 	k21 += r2nxy; k22 += r2xsq;
 	
 	// invert
-	cpFloat det = k11*k22 - k12*k21;
+	cpFloat det = fix14_mul(k11, k22) - fix14_mul(k12, k21);
 	cpAssertSoft(det != 0.0, "Unsolvable constraint.");
 	
-	cpFloat det_inv = 1.0f/det;
+	cpFloat det_inv = fix14_inverse(det);
 	return cpMat2x2New(
-		 k22*det_inv, -k12*det_inv,
-		-k21*det_inv,  k11*det_inv
+		 fix14_mul(k22, det_inv), -fix14_mul(k12,det_inv),
+		-fix14_mul(k21, det_inv),  fix14_mul(k11,det_inv)
  	);
 }
 
 static inline cpFloat
 bias_coef(cpFloat errorBias, cpFloat dt)
 {
-	return 1.0f - cpfpow(errorBias, dt);
+	return int_to_fix14(1) - cpfpow(errorBias, dt);
 }
 
 
